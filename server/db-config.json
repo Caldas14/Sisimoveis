@@ -1,0 +1,11 @@
+{
+  "server": "localhost",
+  "port": 1433,
+  "database": "SistemaCadastroImoveis",
+  "user": "sa",
+  "password": "123456",
+  "options": {
+    "encrypt": false,
+    "trustServerCertificate": true
+  }
+}

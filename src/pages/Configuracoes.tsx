@@ -1,0 +1,746 @@
+import { useState, useEffect } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
+import { Database, User, UserPlus, Edit, Trash2, Check, X, Eye, EyeOff, Folder, FolderOpen, FileText, Plus } from 'lucide-react';
+import { testConnection } from '../lib/db';
+import { Usuario, UsuarioFormData, Cargo } from '../types/usuario';
+import { listarUsuarios, cadastrarUsuario, atualizarUsuario, excluirUsuario, listarCargos } from '../services/usuarioService';
+
+export default function Configuracoes() {
+  const { darkMode } = useTheme();
+  const [activeTab, setActiveTab] = useState<'banco' | 'usuarios' | 'documentos'>('banco');
+  const [dbConfig, setDbConfig] = useState({
+    server: '',
+    port: '',
+    database: '',
+    user: '',
+    password: '',
+    options: {
+      encrypt: false,
+      trustServerCertificate: true
+    }
+  });
+
+  // Carregar configurações do banco ao montar o componente
+  useEffect(() => {
+    const fetchDbConfig = async () => {
+      try {
+        const response = await fetch('/api/db-config');
+        if (response.ok) {
+          const config = await response.json();
+          setDbConfig(config);
+        } else {
+          console.error('Erro ao buscar configurações do banco');
+        }
+      } catch (err) {
+        console.error('Erro ao buscar configurações do banco:', err);
+      }
+    };
+
+    fetchDbConfig();
+  }, []);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [connectionStatus, setConnectionStatus] = useState<string>('');
+  
+  // Estados para gerenciamento de usuários
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [showUsuarioForm, setShowUsuarioForm] = useState(false);
+  const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
+  const [usuarioForm, setUsuarioForm] = useState<UsuarioFormData>({
+    nome: '',
+    nomeUsuario: '',
+    senha: '',
+    cargo: 'Usuário',
+    ativo: true
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingUsuarioId, setDeletingUsuarioId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const handleTestConnection = async () => {
+    setTestStatus('testing');
+    try {
+      const success = await testConnection();
+      setTestStatus(success ? 'success' : 'error');
+    } catch (err) {
+      setTestStatus('error');
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setSaveStatus('saving');
+    setErrorMessage('');
+    try {
+      const configToSave = {
+        server: dbConfig.server,
+        port: parseInt(dbConfig.port.toString()),
+        database: dbConfig.database,
+        user: dbConfig.user,
+        password: dbConfig.password,
+        options: dbConfig.options
+      };
+
+      const response = await fetch('/api/db-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(configToSave),
+      });
+
+      try {
+        const result = await response.json();
+        if (result.success) {
+          setSaveStatus('success');
+          setTestStatus('success');
+          setConnectionStatus(result.connectionStatus || 'Conectado com sucesso');
+          
+          // Aguardar 3 segundos e recarregar a página
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000);
+        } else {
+          setSaveStatus('error');
+          setErrorMessage(result.error + (result.details ? `: ${result.details}` : ''));
+        }
+      } catch (jsonError) {
+        // Se houver erro ao fazer parse do JSON, pode ser que o servidor esteja reiniciando
+        if (response.ok) {
+          setSaveStatus('success');
+          setTestStatus('success');
+          setConnectionStatus('Servidor reiniciando, aguarde...');
+          
+          // Aguardar 3 segundos e recarregar a página
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000);
+        } else {
+          setSaveStatus('error');
+          setErrorMessage('Erro ao processar resposta do servidor. Tente novamente.');
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao salvar configurações:', err);
+      setSaveStatus('error');
+      setErrorMessage('Erro ao salvar configurações: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+    }
+  };
+  
+  // Carregar usuários ao abrir a aba
+  useEffect(() => {
+    if (activeTab === 'usuarios') {
+      carregarUsuarios();
+    }
+  }, [activeTab]);
+  
+  // Função para carregar usuários
+  const carregarUsuarios = async () => {
+    try {
+      const usuariosData = await listarUsuarios();
+      setUsuarios(usuariosData);
+    } catch (err) {
+      console.error('Erro ao carregar usuários:', err);
+      // Usar dados mockados para desenvolvimento
+      setUsuarios([
+        {
+          id: '1',
+          nome: 'Administrador',
+          nomeUsuario: 'admin',
+          cargo: 'Administrador',
+          ativo: true,
+          dataCriacao: new Date().toISOString(),
+          dataAtualizacao: new Date().toISOString(),
+          ultimoLogin: new Date().toISOString()
+        },
+        {
+          id: '2',
+          nome: 'Usuário Teste',
+          nomeUsuario: 'usuario',
+          cargo: 'Usuário',
+          ativo: true,
+          dataCriacao: new Date().toISOString(),
+          dataAtualizacao: new Date().toISOString(),
+          ultimoLogin: null
+        }
+      ]);
+    }
+  };
+  
+  // Função para lidar com a edição de usuário
+  const handleEditUsuario = (usuario: Usuario) => {
+    setEditingUsuario(usuario);
+    setUsuarioForm({
+      nome: usuario.nome,
+      nomeUsuario: usuario.nomeUsuario,
+      senha: '', // Não preencher a senha na edição
+      cargo: usuario.cargo,
+      ativo: usuario.ativo
+    });
+    setShowUsuarioForm(true);
+  };
+  
+  // Função para lidar com a exclusão de usuário
+  const handleDeleteUsuario = (id: string) => {
+    setDeletingUsuarioId(id);
+    setShowDeleteConfirm(true);
+  };
+  
+  // Função para confirmar a exclusão de usuário
+  const confirmDeleteUsuario = async () => {
+    if (!deletingUsuarioId) return;
+    
+    setIsDeleting(true);
+    try {
+      await excluirUsuario(deletingUsuarioId);
+      setUsuarios(usuarios.filter(u => u.id !== deletingUsuarioId));
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error('Erro ao excluir usuário:', err);
+      alert('Erro ao excluir usuário. Tente novamente.');
+    } finally {
+      setIsDeleting(false);
+      setDeletingUsuarioId(null);
+    }
+  };
+  
+  // Função para lidar com mudanças no formulário
+  const handleUsuarioFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      const target = e.target as HTMLInputElement;
+      setUsuarioForm(prev => ({
+        ...prev,
+        [name]: target.checked
+      }));
+    } else {
+      setUsuarioForm(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+  };
+  
+  // Função para lidar com o envio do formulário
+  const handleUsuarioSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setIsSubmitting(true);
+    
+    try {
+      if (editingUsuario) {
+        // Atualizar usuário existente
+        const usuarioAtualizado = await atualizarUsuario(editingUsuario.id, {
+          ...usuarioForm,
+          // Se a senha estiver vazia, não enviá-la
+          senha: usuarioForm.senha ? usuarioForm.senha : undefined
+        });
+        
+        setUsuarios(prev => 
+          prev.map(u => u.id === usuarioAtualizado.id ? usuarioAtualizado : u)
+        );
+      } else {
+        // Criar novo usuário
+        const novoUsuario = await cadastrarUsuario(usuarioForm);
+        setUsuarios(prev => [...prev, novoUsuario]);
+      }
+      
+      // Resetar formulário e fechar modal
+      setUsuarioForm({
+        nome: '',
+        nomeUsuario: '',
+        senha: '',
+        cargo: 'Usuário',
+        ativo: true
+      });
+      setShowUsuarioForm(false);
+      setEditingUsuario(null);
+    } catch (err: any) {
+      console.error('Erro ao salvar usuário:', err);
+      setFormError(err.message || 'Erro ao salvar usuário. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Configurações</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Gerencie as configurações do sistema de cadastro de imóveis.
+        </p>
+      </div>
+      
+      <div className="flex flex-col space-y-6 md:flex-row md:space-y-0 md:space-x-6">
+        {/* Sidebar de navegação */}
+        <div className="w-full md:w-64 shrink-0">
+          <div className="card overflow-hidden">
+            <nav className="flex flex-col">
+
+              
+              <button
+                onClick={() => setActiveTab('banco')}
+                className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
+                  activeTab === 'banco'
+                    ? 'bg-primary-50 border-primary-600 text-primary-700'
+                    : 'border-transparent text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <Database className="h-5 w-5" />
+                Banco de Dados
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('usuarios')}
+                className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
+                  activeTab === 'usuarios'
+                    ? 'bg-primary-50 border-primary-600 text-primary-700'
+                    : 'border-transparent text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <User className="h-5 w-5" />
+                Usuários
+              </button>
+              
+            </nav>
+          </div>
+        </div>
+        
+        {/* Conteúdo da tab */}
+        <div className="flex-1">
+          <div className="card p-6">
+            {activeTab === 'geral' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-medium text-gray-900">Configurações Gerais</h2>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="system-name" className="block text-sm font-medium text-gray-700">
+                      Nome do Sistema
+                    </label>
+                    <input
+                      type="text"
+                      id="system-name"
+                      className="input mt-1"
+                      defaultValue="Sistema de Cadastro de Imóveis"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="company-name" className="block text-sm font-medium text-gray-700">
+                      Nome da Empresa
+                    </label>
+                    <input
+                      type="text"
+                      id="company-name"
+                      className="input mt-1"
+                      defaultValue="Minha Empresa"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="email-contact" className="block text-sm font-medium text-gray-700">
+                      Email de Contato
+                    </label>
+                    <input
+                      type="email"
+                      id="email-contact"
+                      className="input mt-1"
+                      defaultValue="contato@empresa.com"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === 'banco' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-medium text-gray-900">Configurações do Banco de Dados</h2>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label htmlFor="db-server" className="block text-sm font-medium text-gray-700">
+                        Servidor
+                      </label>
+                      <input
+                        type="text"
+                        id="db-server"
+                        className="input mt-1"
+                        value={dbConfig.server}
+                        onChange={(e) => setDbConfig({ ...dbConfig, server: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="db-port" className="block text-sm font-medium text-gray-700">
+                        Porta
+                      </label>
+                      <input
+                        type="text"
+                        id="db-port"
+                        className="input mt-1"
+                        value={dbConfig.port}
+                        onChange={(e) => setDbConfig({ ...dbConfig, port: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="db-name" className="block text-sm font-medium text-gray-700">
+                        Nome do Banco
+                      </label>
+                      <input
+                        type="text"
+                        id="db-name"
+                        className="input mt-1"
+                        value={dbConfig.database}
+                        onChange={(e) => setDbConfig({ ...dbConfig, database: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="db-user" className="block text-sm font-medium text-gray-700">
+                        Usuário
+                      </label>
+                      <input
+                        type="text"
+                        id="db-user"
+                        className="input mt-1"
+                        value={dbConfig.user}
+                        onChange={(e) => setDbConfig({ ...dbConfig, user: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="db-password" className="block text-sm font-medium text-gray-700">
+                        Senha
+                      </label>
+                      <input
+                        type="password"
+                        id="db-password"
+                        className="input mt-1"
+                        value={dbConfig.password}
+                        onChange={(e) => setDbConfig({ ...dbConfig, password: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="flex items-center mt-4">
+                      <input
+                        type="checkbox"
+                        id="db-encrypt"
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={dbConfig.options.encrypt}
+                        onChange={(e) => setDbConfig({
+                          ...dbConfig,
+                          options: { ...dbConfig.options, encrypt: e.target.checked }
+                        })}
+                      />
+                      <label htmlFor="db-encrypt" className="ml-2 block text-sm text-gray-700">
+                        Usar conexão criptografada
+                      </label>
+                    </div>
+                  </div>
+                  
+                  {errorMessage && (
+                    <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md">
+                      {errorMessage}
+                    </div>
+                  )}
+
+                  {saveStatus === 'success' && (
+                    <div className="mb-4 p-4 bg-green-50 text-green-700 rounded-md">
+                      <p>Configurações salvas com sucesso! O servidor será reiniciado automaticamente.</p>
+                      <p className="mt-2 font-semibold">{connectionStatus}</p>
+                      <p className="mt-1 text-sm">Aguarde alguns segundos e recarregue a página.</p>
+                    </div>
+                  )}
+
+                  {saveStatus === 'saving' && (
+                    <div className="mb-4">
+                      <div className="h-2 bg-gray-200 rounded-full">
+                        <div className="h-2 bg-blue-600 rounded-full animate-pulse w-full"></div>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-2">Salvando configurações e testando conexão...</p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end space-x-4">
+                    <button
+                      type="button"
+                      className={`btn ${saveStatus === 'saving' ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'btn-primary'}`}
+                      onClick={handleSaveConfig}
+                      disabled={saveStatus === 'saving'}
+                    >
+                      {saveStatus === 'saving' ? 'Salvando...' : 'Salvar Configurações'}
+                    </button>
+
+                    <button 
+                      type="button" 
+                      className={`btn ${
+                        testStatus === 'success' 
+                          ? 'bg-green-600 hover:bg-green-700 text-white' 
+                          : testStatus === 'error'
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'btn-primary'
+                      }`}
+                      onClick={handleTestConnection}
+                      disabled={testStatus === 'testing'}
+                    >
+                      {testStatus === 'testing' ? 'Testando...' :
+                       testStatus === 'success' ? 'Conexão Bem-sucedida' :
+                       testStatus === 'error' ? 'Falha na Conexão' :
+                       'Testar Conexão'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === 'documentos' && (
+              <DocumentosConfig />
+            )}
+            
+            {activeTab === 'usuarios' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-medium text-gray-900">Gerenciamento de Usuários</h2>
+                  <button 
+                    type="button" 
+                    className="btn btn-primary flex items-center gap-2"
+                    onClick={() => {
+                      setEditingUsuario(null);
+                      setShowUsuarioForm(true);
+                    }}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Novo Usuário
+                  </button>
+                </div>
+                
+                {/* Lista de usuários */}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuário</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cargo</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {usuarios.map((usuario) => (
+                        <tr key={usuario.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{usuario.nome}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-500">{usuario.nomeUsuario}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${usuario.cargo === 'Administrador' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                              {usuario.cargo}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${usuario.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {usuario.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex space-x-2">
+                              <button 
+                                onClick={() => handleEditUsuario(usuario)}
+                                className="text-indigo-600 hover:text-indigo-900"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteUsuario(usuario.id)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {usuarios.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                            Nenhum usuário encontrado
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Formulário de edição/criação de usuário */}
+                {showUsuarioForm && (
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-medium text-gray-900">
+                          {editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}
+                        </h3>
+                        <button 
+                          onClick={() => setShowUsuarioForm(false)}
+                          className="text-gray-400 hover:text-gray-500"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                      
+                      <form onSubmit={handleUsuarioSubmit} className="space-y-4">
+                        <div>
+                          <label htmlFor="nome" className="block text-sm font-medium text-gray-700">Nome</label>
+                          <input
+                            type="text"
+                            id="nome"
+                            name="nome"
+                            className="input mt-1"
+                            value={usuarioForm.nome}
+                            onChange={handleUsuarioFormChange}
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="nomeUsuario" className="block text-sm font-medium text-gray-700">Nome de Usuário</label>
+                          <input
+                            type="text"
+                            id="nomeUsuario"
+                            name="nomeUsuario"
+                            className="input mt-1"
+                            value={usuarioForm.nomeUsuario}
+                            onChange={handleUsuarioFormChange}
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="senha" className="block text-sm font-medium text-gray-700">
+                            Senha {editingUsuario && "(deixe em branco para manter a atual)"}
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              id="senha"
+                              name="senha"
+                              className="input mt-1 pr-10"
+                              value={usuarioForm.senha}
+                              onChange={handleUsuarioFormChange}
+                              required={!editingUsuario}
+                            />
+                            <button 
+                              type="button"
+                              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500"
+                              onClick={() => setShowPassword(!showPassword)}
+                            >
+                              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="cargo" className="block text-sm font-medium text-gray-700">Cargo</label>
+                          <select
+                            id="cargo"
+                            name="cargo"
+                            className="input mt-1"
+                            value={usuarioForm.cargo}
+                            onChange={handleUsuarioFormChange}
+                            required
+                          >
+                            <option value="">Selecione um cargo</option>
+                            <option value="Administrador">Administrador</option>
+                            <option value="Usuário">Usuário</option>
+                          </select>
+                        </div>
+                        
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="ativo"
+                            name="ativo"
+                            className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            checked={usuarioForm.ativo}
+                            onChange={handleUsuarioFormChange}
+                          />
+                          <label htmlFor="ativo" className="ml-2 block text-sm text-gray-700">
+                            Usuário ativo
+                          </label>
+                        </div>
+                        
+                        {formError && (
+                          <div className="text-sm text-red-600">{formError}</div>
+                        )}
+                        
+                        <div className="flex justify-end space-x-3 pt-4">
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setShowUsuarioForm(false)}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            className="btn btn-primary"
+                            disabled={isSubmitting}
+                          >
+                            {isSubmitting ? 'Salvando...' : 'Salvar'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Confirmação de exclusão */}
+                {showDeleteConfirm && (
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-medium text-gray-900">Confirmar Exclusão</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.
+                        </p>
+                      </div>
+                      
+                      <div className="flex justify-end space-x-3">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => setShowDeleteConfirm(false)}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={confirmDeleteUsuario}
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? 'Excluindo...' : 'Excluir'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
