@@ -89,7 +89,7 @@ export interface Imovel {
 export interface ImovelFormData {
   matricula: string;
   localizacao: string;
-  area: number;
+  area: number | string; // Permitir string para formatação com vírgula
   objeto: string;
   matriculasOriginadas: string;
   observacao: string;

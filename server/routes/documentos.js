@@ -17,20 +17,19 @@ const configPath = path.join(__dirname, '..', 'documentos-config.json');
 function lerConfigDocumentos() {
   try {
     if (!fs.existsSync(configPath)) {
-      // Criar arquivo de configuração padrão se não existir
+      // Criar arquivo de configuração vazio se não existir
       const configPadrao = {
-        diretoriosDocumentos: [
-          path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'Documents'),
-          path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'Downloads'),
-          path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'Desktop')
-        ]
+        diretoriosDocumentos: []
       };
+      console.log('Arquivo de configuração não encontrado, criando com estrutura vazia');
       fs.writeFileSync(configPath, JSON.stringify(configPadrao, null, 2));
       return configPadrao;
     }
     
     const configData = fs.readFileSync(configPath, 'utf8');
-    return JSON.parse(configData);
+    const config = JSON.parse(configData);
+    console.log(`Configuração de documentos carregada: ${config.diretoriosDocumentos.length} diretórios configurados`);
+    return config;
   } catch (err) {
     console.error('Erro ao ler configuração de documentos:', err);
     return { diretoriosDocumentos: [] };
@@ -293,19 +292,12 @@ export default function(pool, poolConnect) {
             // Resolver caminho relativo para absoluto
             caminhoNormalizado = path.resolve(process.cwd(), caminhoNormalizado);
           } else {
-            // Tentar encontrar o arquivo em algum diretório comum
-            const diretoriosComuns = [
-              process.cwd(),
-              path.join(process.cwd(), 'documentos'),
-              path.join(os.homedir(), 'Downloads'),
-              path.join(os.homedir(), 'Documents'),
-              path.join(os.homedir(), 'Desktop'),
-              path.join(os.homedir(), 'OneDrive', 'Desktop'),
-              path.join(os.homedir(), 'OneDrive', 'Área de Trabalho')
-            ];
+            // Obter a lista de diretórios configurados do arquivo centralizado
+            const diretoriosDocumentos = lerConfigDocumentos().diretoriosDocumentos || [];
+            console.log(`Buscando documento em ${diretoriosDocumentos.length} diretórios configurados`);
             
-            // Verificar se o arquivo existe em algum dos diretórios comuns
-            for (const dir of diretoriosComuns) {
+            // Verificar se o arquivo existe em algum dos diretórios configurados
+            for (const dir of diretoriosDocumentos) {
               const caminhoCompleto = path.join(dir, caminhoNormalizado);
               if (fs.existsSync(caminhoCompleto)) {
                 caminhoNormalizado = caminhoCompleto;

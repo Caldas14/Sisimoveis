@@ -3,11 +3,11 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   Building2, Edit, ChevronRight, 
-  Trash2, FileDown, Plus, Upload, File, ExternalLink, Loader2,
-  Check, X, AlertTriangle, AlertCircle
+  Trash2, FileDown, Plus, File, Loader2,
+  Check, X, AlertTriangle, FileSpreadsheet, FileBadge
 } from 'lucide-react';
-import { formatarData, formatarArea, downloadCSV } from '../lib/utils';
-import { Imovel, Documento } from '../types/imovel';
+import { formatarData, formatarArea, downloadFormatadoCSV } from '../lib/utils';
+import { Imovel } from '../types/imovel';
 import DocumentosImovel from '../components/DocumentosImovel';
 
 export default function DetalhesImovel() {
@@ -23,7 +23,9 @@ export default function DetalhesImovel() {
   const [excluindo, setExcluindo] = useState(false);
   const [mensagemExclusao, setMensagemExclusao] = useState<{tipo: 'sucesso' | 'erro', texto: string} | null>(null);
   const [contagemDocumentos, setContagemDocumentos] = useState<number>(0);
-  
+  // Estado para controlar o modal de exportação
+  const [mostrarModalExportacao, setMostrarModalExportacao] = useState<boolean>(false);
+
   // Definir a função global para atualizar a contagem de documentos
   useEffect(() => {
     // Definir a função global para atualizar a contagem de documentos
@@ -36,7 +38,7 @@ export default function DetalhesImovel() {
       delete window.atualizarContagemDocumentos;
     };
   }, []);
-  
+
   useEffect(() => {
     async function carregarDados() {
       if (!id) return;
@@ -71,6 +73,49 @@ export default function DetalhesImovel() {
           const secundarios = await buscarImoveisSecundarios(id);
           console.log('Imóveis secundários carregados:', secundarios.length);
           setImoveisSecundarios(secundarios);
+          
+          // Pré-carregar contagem de documentos para imóveis secundários
+          let totalDocs = 0;
+          
+          // Carregar documentos do imóvel principal
+          try {
+            const responsePrincipal = await fetch(`/api/documentos/imovel/${id}`);
+            if (responsePrincipal.ok) {
+              const docsPrincipais = await responsePrincipal.json();
+              totalDocs += docsPrincipais.length;
+            }
+          } catch (err) {
+            console.error('Erro ao carregar documentos do imóvel principal:', err);
+          }
+          
+          // Carregar documentos dos imóveis secundários
+          for (const secImovel of secundarios) {
+            try {
+              const responseSecundario = await fetch(`/api/documentos/imovel/${secImovel.id}`);
+              if (responseSecundario.ok) {
+                const docsSecundarios = await responseSecundario.json();
+                totalDocs += docsSecundarios.length;
+              }
+            } catch (err) {
+              console.error(`Erro ao carregar documentos do imóvel secundário ${secImovel.id}:`, err);
+            }
+          }
+          
+          // Atualizar contagem total de documentos
+          console.log('Total de documentos carregados inicialmente:', totalDocs);
+          setContagemDocumentos(totalDocs);
+        } else {
+          // Para imóveis secundários, carregar apenas seus próprios documentos
+          try {
+            const response = await fetch(`/api/documentos/imovel/${id}`);
+            if (response.ok) {
+              const docs = await response.json();
+              console.log('Documentos do imóvel secundário carregados:', docs.length);
+              setContagemDocumentos(docs.length);
+            }
+          } catch (err) {
+            console.error('Erro ao carregar documentos do imóvel:', err);
+          }
         }
       } catch (err) {
         console.error('Erro ao carregar dados do imóvel:', err);
@@ -82,7 +127,126 @@ export default function DetalhesImovel() {
     
     carregarDados();
   }, [id]);
-  
+
+  // Define as seções para exportação
+  const definirSecoesExportacao = () => {
+    return [
+      {
+        titulo: 'Informações Gerais',
+        campos: [
+          'Matrícula', 'Tipo de Imóvel', 'Objeto', 'Finalidade', 
+          'Área (m²)', 'Data de Cadastro', 'Imóvel Principal'
+        ]
+      },
+      {
+        titulo: 'Detalhes Legais e Financeiros',
+        campos: [
+          'Tipo de Posse', 'Status de Transferência', 
+          'Tipo de Uso', 'Valor Venal', 'Registro IPTU'
+        ]
+      },
+      {
+        titulo: 'Localização',
+        campos: [
+          'Localização', 'Ponto de Referência', 
+          'Latitude', 'Longitude'
+        ]
+      },
+      {
+        titulo: 'Infraestrutura',
+        campos: [
+          'Água', 'Esgoto', 'Energia', 
+          'Pavimentação', 'Iluminação', 'Coleta de Lixo'
+        ]
+      }
+    ];
+  };
+
+  // Preparar dados do imóvel para exportação
+  const prepararDadosImovel = (imoveisParaExportar: Imovel[]) => {
+    return imoveisParaExportar.map(i => ({
+      'Matrícula': i.matricula,
+      'Localização': i.localizacao,
+      'Área (m²)': formatarArea(i.area).replace(' m²', ''),
+      'Objeto': i.objeto,
+      'Finalidade': i.finalidade,
+      'Tipo de Imóvel': i.tipoImovel,
+      'Status de Transferência': i.statusTransferencia,
+      'Tipo de Posse': i.tipoPosse,
+      'Tipo de Uso': i.tipoUsoEdificacao,
+      'Valor Venal': i.valorVenal ? `R$ ${parseFloat(String(i.valorVenal)).toLocaleString('pt-BR')}` : 'Não informado',
+      'Registro IPTU': i.registroIPTU || 'Não informado',
+      'Ponto de Referência': i.pontoReferencia || 'Não informado',
+      'Latitude': i.latitude || 'Não informado',
+      'Longitude': i.longitude || 'Não informado',
+      'Água': i.infraestrutura?.agua ? 'Sim' : 'Não',
+      'Esgoto': i.infraestrutura?.esgoto ? 'Sim' : 'Não',
+      'Energia': i.infraestrutura?.energia ? 'Sim' : 'Não',
+      'Pavimentação': i.infraestrutura?.pavimentacao ? 'Sim' : 'Não',
+      'Iluminação': i.infraestrutura?.iluminacao ? 'Sim' : 'Não',
+      'Coleta de Lixo': i.infraestrutura?.coletaLixo ? 'Sim' : 'Não',
+      'Imóvel Principal': i.imovelPaiId === null ? 'Sim' : 'Não',
+      'Data de Cadastro': formatarData(i.dataCadastro || new Date())
+    }));
+  };
+
+  // Funções de exportação
+  const exportarApenasImovelPrincipal = () => {
+    if (!imovel) return;
+    
+    const dadosParaExportar = prepararDadosImovel([imovel]);
+    const secoes = definirSecoesExportacao();
+    
+    downloadFormatadoCSV(dadosParaExportar, `imovel-${imovel.matricula}`, {
+      secoes: secoes,
+      corTitulos: '#2563EB',
+      corCabecalhos: '#4CAF50',
+      tituloRelatorio: `Relatório Detalhado - Imóvel ${imovel.matricula}`
+    });
+    
+    setMostrarModalExportacao(false);
+  };
+
+  const exportarImovelComSecundarios = () => {
+    if (!imovel) return;
+    
+    const todosImoveis = [imovel, ...imoveisSecundarios];
+    const dadosParaExportar = prepararDadosImovel(todosImoveis);
+    
+    // Para múltiplos imóveis, usamos formato tabular com cabeçalho personalizado
+    downloadFormatadoCSV(dadosParaExportar, `imovel-${imovel.matricula}-com-secundarios`, {
+      corTitulos: '#2563EB',
+      corCabecalhos: '#4CAF50',
+      tituloRelatorio: `Relatório Completo - Imóvel ${imovel.matricula} e Secundários (${imoveisSecundarios.length})`
+    });
+    
+    setMostrarModalExportacao(false);
+  };
+
+  // Função principal de exportação que decide o fluxo
+  const exportarParaCSV = () => {
+    if (!imovel) return;
+    
+    // Se é um imóvel secundário OU é principal sem secundários, exporta direto
+    if (imovel.imovelPaiId !== null || imoveisSecundarios.length === 0) {
+      const dadosParaExportar = prepararDadosImovel([imovel]);
+      const secoes = definirSecoesExportacao();
+      
+      // Define um título específico dependendo se é imóvel secundário ou principal
+      const tipoImovel = imovel.imovelPaiId !== null ? 'Secundário' : 'Principal';
+      
+      downloadFormatadoCSV(dadosParaExportar, `imovel-${imovel.matricula}`, {
+        secoes: secoes,
+        corTitulos: '#2563EB',
+        corCabecalhos: '#4CAF50',
+        tituloRelatorio: `Relatório de Imóvel ${tipoImovel} - Matrícula ${imovel.matricula}`
+      });
+    } else {
+      // É um imóvel principal com secundários, mostrar modal de escolha
+      setMostrarModalExportacao(true);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
@@ -91,7 +255,7 @@ export default function DetalhesImovel() {
       </div>
     );
   }
-  
+
   if (error || !imovel) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
@@ -105,7 +269,7 @@ export default function DetalhesImovel() {
       </div>
     );
   }
-  
+
   // Função para excluir o imóvel (principal ou secundário)
   async function excluirImovelPrincipal() {
     if (!id) return;
@@ -147,42 +311,60 @@ export default function DetalhesImovel() {
       setExcluindo(false);
     }
   }
-  
-  // Preparar dados para exportação CSV
-  const exportarParaCSV = () => {
-    const dadosParaExportar = [imovel, ...imoveisSecundarios].map(i => ({
-      Matrícula: i.matricula,
-      Localização: i.localizacao,
-      'Área (m²)': i.area,
-      Objeto: i.objeto,
-      Finalidade: i.finalidade,
-      'Tipo de Imóvel': i.tipoImovel,
-      'Status de Transferência': i.statusTransferencia,
-      'Tipo de Posse': i.tipoPosse,
-      'Tipo de Uso': i.tipoUsoEdificacao,
-      'Valor Venal': i.valorVenal,
-      'Registro IPTU': i.registroIPTU,
-      'Ponto de Referência': i.pontoReferencia,
-      'Latitude': i.latitude,
-      'Longitude': i.longitude,
-      'Água': i.infraestrutura?.agua ? 'Sim' : 'Não',
-      'Esgoto': i.infraestrutura?.esgoto ? 'Sim' : 'Não',
-      'Energia': i.infraestrutura?.energia ? 'Sim' : 'Não',
-      'Pavimentação': i.infraestrutura?.pavimentacao ? 'Sim' : 'Não',
-      'Iluminação': i.infraestrutura?.iluminacao ? 'Sim' : 'Não',
-      'Coleta de Lixo': i.infraestrutura?.coletaLixo ? 'Sim' : 'Não',
-      'Imóvel Principal': i.imovelPaiId === null ? 'Sim' : 'Não'
-    }));
-    
-    downloadCSV(dadosParaExportar, `imovel-${imovel.matricula}.csv`);
-  };
-  
+
   return (
     <div className={`space-y-6 animate-fade-in p-6 rounded-lg ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Mensagem de exclusão */}
       {mensagemExclusao && (
         <div className={`mb-4 rounded-md p-4 ${mensagemExclusao.tipo === 'sucesso' ? (darkMode ? 'bg-green-900 text-green-100' : 'bg-green-50 text-green-800') : (darkMode ? 'bg-red-900 text-red-100' : 'bg-red-50 text-red-800')}`}>
           {mensagemExclusao.texto}
+        </div>
+      )}
+      
+      {/* Modal para escolha do tipo de exportação */}
+      {mostrarModalExportacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+          <div className={`w-full max-w-md rounded-lg p-6 shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className="mb-4 flex items-center">
+              <FileSpreadsheet className="mr-2 h-6 w-6 text-blue-500" />
+              <h3 className={`text-lg font-medium ${darkMode ? 'text-gray-100' : ''}`}>Opções de Exportação</h3>
+            </div>
+            
+            <p className={`mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              Como deseja exportar o imóvel <strong>{imovel?.matricula}</strong>?
+            </p>
+            
+            <div className="flex flex-col space-y-3">
+              <button
+                onClick={exportarApenasImovelPrincipal}
+                className={`flex items-center rounded px-4 py-2 transition-colors ${
+                  darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                }`}
+              >
+                <File className="mr-2 h-5 w-5" />
+                Apenas Imóvel Principal
+              </button>
+              
+              <button
+                onClick={exportarImovelComSecundarios}
+                className={`flex items-center rounded px-4 py-2 transition-colors ${
+                  darkMode ? 'bg-indigo-900 text-white hover:bg-indigo-800' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                }`}
+              >
+                <FileBadge className="mr-2 h-5 w-5" />
+                Imóvel Principal + {imoveisSecundarios.length} Secundário{imoveisSecundarios.length !== 1 ? 's' : ''}
+              </button>
+            </div>
+            
+            <div className="mt-6 flex justify-end border-t pt-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}">
+              <button
+                onClick={() => setMostrarModalExportacao(false)}
+                className={`rounded px-4 py-2 ${darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
       
@@ -403,10 +585,28 @@ function DetalhesTab({ imovel, imoveisSecundarios = [] }: { imovel: Imovel, imov
   // Verificar se é imóvel principal
   const ehImovelPrincipal = !imovel.imovelPaiId;
   
-  // Usar os valores calculados da API
-  const areaDesmembradaTotal = imovel.areaDesmembrada;
-  const areaRemanescente = imovel.areaRemanescente;
-  const percentualDesmembrado = imovel.percentualDesmembrado;
+  // Calcular os valores baseados nos imóveis secundários existentes
+  const areaDesmembradaTotal = ehImovelPrincipal 
+    ? imoveisSecundarios.reduce((soma, sec) => soma + (sec.area || 0), 0)
+    : imovel.areaDesmembrada || 0;
+    
+  const areaRemanescente = ehImovelPrincipal
+    ? (imovel.area || 0) - areaDesmembradaTotal
+    : imovel.areaRemanescente || 0;
+    
+  // Calcular percentual com no máximo 2 casas decimais
+  const percentualDesmembrado = imovel.area > 0
+    ? parseFloat((areaDesmembradaTotal * 100 / imovel.area).toFixed(2))
+    : 0;
+    
+  console.log('Resumo de Áreas:', {
+    áreaTotal: imovel.area,
+    areaDesmembradaTotal,
+    areaRemanescente,
+    percentualDesmembrado,
+    quantidadeSecundarios: imoveisSecundarios.length,
+    áreasSecundarios: imoveisSecundarios.map(sec => sec.area)
+  });
   
   // Verificar se há inconsistência na área
   const temInconsistenciaArea = ehImovelPrincipal && areaDesmembradaTotal > imovel.area;
@@ -551,7 +751,7 @@ function DetalhesTab({ imovel, imoveisSecundarios = [] }: { imovel: Imovel, imov
             <div className="mt-2">
               <div className="flex justify-between text-sm mb-1">
                 <span className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Área Desmembrada</span>
-                <span className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{percentualDesmembrado}%</span>
+                <span className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{percentualDesmembrado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
               </div>
               <div className={`w-full rounded-full h-2.5 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
                 <div 
@@ -798,7 +998,7 @@ function DocumentosTab({ imovel }: { imovel: Imovel }) {
   const { darkMode } = useTheme();
   const [imoveisSecundarios, setImoveisSecundarios] = useState<Imovel[]>([]);
   const [carregandoSecundarios, setCarregandoSecundarios] = useState(false);
-  const [totalDocumentos, setTotalDocumentos] = useState(0);
+  const [totalDocumentos, setTotalDocumentos] = useState(0); // Mantida para uso interno
   const [documentosPorImovel, setDocumentosPorImovel] = useState<Record<string, number>>({});
   const [mostrarDocumentosSecundarios, setMostrarDocumentosSecundarios] = useState<Record<string, boolean>>({});
   

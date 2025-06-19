@@ -627,6 +627,13 @@ export default function Documentos() {
                                   >
                                     <Building2 className="h-4 w-4 text-blue-500" />
                                   </Link>
+                                  <button 
+                                    onClick={() => excluirDocumento(doc.Id)}
+                                    className={`p-1 rounded-full ${darkMode ? 'hover:bg-red-700' : 'hover:bg-red-100'}`}
+                                    title="Excluir Documento"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </button>
                                 </div>
                               </div>
                             </li>
@@ -716,6 +723,13 @@ export default function Documentos() {
                                               >
                                                 <Building2 className="h-3 w-3 text-blue-500" />
                                               </Link>
+                                              <button 
+                                                onClick={() => excluirDocumento(doc.Id)}
+                                                className={`p-1 rounded-full ${darkMode ? 'hover:bg-red-700' : 'hover:bg-red-100'}`}
+                                                title="Excluir Documento"
+                                              >
+                                                <Trash2 className="h-3 w-3 text-red-500" />
+                                              </button>
                                             </div>
                                           </div>
                                         </li>

@@ -144,7 +144,7 @@ export default function(pool, poolConnect) {
         WHERE Id = '${usuario.Id}'
       `);
       
-      // Gerar token JWT
+      // Gerar token JWT - sem expiração definida (sessão permanente)
       const token = jwt.sign(
         { 
           id: usuario.Id, 
@@ -152,8 +152,8 @@ export default function(pool, poolConnect) {
           nomeUsuario: usuario.NomeUsuario,
           cargoId: usuario.CargoId || 2 // Assume 2 como usuário normal se não tiver CargoId
         }, 
-        JWT_SECRET, 
-        { expiresIn: '8h' }
+        JWT_SECRET
+        // Parâmetro expiresIn removido - token nunca expirará
       );
       
       // Retornar dados do usuário e token

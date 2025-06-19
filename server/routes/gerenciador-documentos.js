@@ -8,6 +8,23 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Função para ler a configuração de documentos
+function lerConfigDocumentos() {
+  try {
+    const configPath = path.join(__dirname, '..', 'documentos-config.json');
+    if (!fs.existsSync(configPath)) {
+      console.error('Arquivo de configuração de documentos não encontrado:', configPath);
+      return { diretoriosDocumentos: [] };
+    }
+    
+    const configData = fs.readFileSync(configPath, 'utf8');
+    return JSON.parse(configData);
+  } catch (err) {
+    console.error('Erro ao ler configuração de documentos:', err);
+    return { diretoriosDocumentos: [] };
+  }
+}
+
 // Função para normalizar caminhos de arquivos
 function normalizarCaminho(caminho, isAbsolutePath) {
   if (!caminho) return null;
@@ -17,21 +34,21 @@ function normalizarCaminho(caminho, isAbsolutePath) {
   
   // Se não for um caminho absoluto, tentar resolver para um caminho absoluto
   if (!isAbsolutePath && !path.isAbsolute(caminhoNormalizado)) {
-    // Lista de diretórios comuns para procurar
-    const diretorios = [
-      'C:\\Users\\Public\\Documents',
-      'C:\\Users\\Public\\Downloads',
-      'C:\\Users\\Public\\Pictures',
-      path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'Documents'),
-      path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'Downloads'),
-      path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'Desktop')
-    ];
+    // Obter a lista de diretórios configurados do arquivo centralizado
+    const { diretoriosDocumentos } = lerConfigDocumentos();
     
-    // Verificar se o arquivo existe em algum dos diretórios comuns
-    for (const diretorio of diretorios) {
+    // Verificar se o arquivo existe em algum dos diretórios configurados
+    for (const diretorio of diretoriosDocumentos) {
+      if (!diretorio) continue;
+      
       const caminhoCompleto = path.join(diretorio, caminhoNormalizado);
-      if (fs.existsSync(caminhoCompleto)) {
-        return caminhoCompleto;
+      try {
+        if (fs.existsSync(caminhoCompleto)) {
+          console.log(`Arquivo encontrado em: ${caminhoCompleto}`);
+          return caminhoCompleto;
+        }
+      } catch (err) {
+        console.error(`Erro ao verificar caminho ${caminhoCompleto}:`, err);
       }
     }
   }

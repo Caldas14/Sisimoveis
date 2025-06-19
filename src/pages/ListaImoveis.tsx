@@ -21,6 +21,58 @@ export default function ListaImoveis() {
   const [imoveisSecundarios, setImoveisSecundarios] = useState<ImovelSecundarioInfo[]>([]);
   const [modoExclusao, setModoExclusao] = useState<'normal' | 'cascata'>('normal');
   
+  // Função para verificar se um imóvel tem secundários vinculados
+  async function verificarImoveisSecundarios(imovel: Imovel) {
+    if (imovel.imovelPaiId !== null) {
+      // Se o imóvel já for secundário, não precisa verificar
+      return [];
+    }
+
+    try {
+      // Importar o serviço de imóveis
+      const { obterImoveisSecundarios } = await import('../services/imovelService');
+      
+      // Buscar imóveis secundários
+      const secundarios = await obterImoveisSecundarios(imovel.id);
+      console.log('Imóveis secundários encontrados:', secundarios);
+      
+      return secundarios;
+    } catch (err) {
+      console.error('Erro ao verificar imóveis secundários:', err);
+      return [];
+    }
+  }
+
+  // Função para preparar exclusão, verificando se há imóveis secundários
+  async function prepararExclusao(imovel: Imovel) {
+    try {
+      // Resetar estado
+      setMensagemExclusao(null);
+      setImoveisSecundarios([]);
+      setModoExclusao('normal');
+      
+      // Se for imóvel principal, verificar se tem secundários
+      if (imovel.imovelPaiId === null) {
+        const secundarios = await verificarImoveisSecundarios(imovel);
+        
+        if (secundarios && secundarios.length > 0) {
+          // Atualizar estado para mostrar os secundários
+          setImoveisSecundarios(secundarios);
+          setModoExclusao('cascata');
+        }
+      }
+      
+      // Mostrar modal de confirmação
+      setImovelParaExcluir(imovel);
+    } catch (err) {
+      console.error('Erro ao preparar exclusão:', err);
+      setMensagemExclusao({
+        tipo: 'erro',
+        texto: err instanceof Error ? err.message : 'Erro ao preparar exclusão do imóvel'
+      });
+    }
+  }
+
   // Função para excluir um imóvel
   async function excluirImovel(id: string, forcarCascata: boolean = false) {
     try {
@@ -172,31 +224,6 @@ export default function ListaImoveis() {
     }
   }, [imoveis, busca, filtroTipo, filtroStatus, filtroTipoImovel]);
   
-  // Função para preparar a exclusão de um imóvel, verificando se tem secundários
-  async function prepararParaExcluir(imovel: Imovel) {
-    try {
-      setMensagemExclusao(null);
-      setImovelParaExcluir(imovel);
-      setModoExclusao('normal');
-      setImoveisSecundarios([]);
-      
-      console.log('Preparando para excluir imóvel:', imovel.id, imovel.matricula);
-      
-      // Verificar se o imóvel tem secundários
-      const { fetchApi } = await import('../services/imovelService');
-      const response = await fetchApi(`/imoveis/${imovel.id}/secundarios`);
-      
-      if (response.temSecundarios && response.secundarios && response.secundarios.length > 0) {
-        console.log(`Imóvel ${imovel.id} tem ${response.count} secundários:`, response.secundarios);
-        setImoveisSecundarios(response.secundarios);
-        setModoExclusao('cascata');
-      }
-    } catch (err) {
-      console.error('Erro ao verificar secundários:', err);
-      // Continuar com o modal normal mesmo se falhar a verificação
-    }
-  }
-  
   // Exportar dados para CSV
   const exportarParaCSV = () => {
     const dadosParaExportar = imoveisFiltrados.map(imovel => ({
@@ -280,7 +307,7 @@ export default function ListaImoveis() {
               <button
                 type="button"
                 className="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 rounded-md bg-red-600 dark:bg-red-700 text-sm font-medium text-white hover:bg-red-700 dark:hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800"
-                onClick={() => confirmarExclusao()}
+                onClick={() => imovelParaExcluir && excluirImovel(imovelParaExcluir.id, modoExclusao === 'cascata')}
               >
                 {excluindo ? (
                   <>
@@ -450,7 +477,7 @@ export default function ListaImoveis() {
               <ImovelListItem
                 key={imovel.id}
                 imovel={imovel}
-                onExcluir={prepararParaExcluir}
+                onExcluir={prepararExclusao}
               />
             ))}
           </ul>

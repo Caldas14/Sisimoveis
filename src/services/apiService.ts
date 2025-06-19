@@ -26,10 +26,10 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}): Pr
     ...options.headers
   };
   
-  console.log('fetchApi: Chamando', url);
-  console.log(`
-            
-            `);
+  // Só exibir logs para chamadas que não sejam de verificação de token
+  if (!endpoint.includes('verificar-token')) {
+    console.log('fetchApi: Chamando', url);
+  }
   
   try {
     const response = await fetch(url, {
@@ -37,7 +37,10 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}): Pr
       headers
     });
     
-    console.log('fetchApi: Resposta para', endpoint, ':', response.status, response.statusText);
+    // Só exibir logs para chamadas que não sejam de verificação de token
+    if (!endpoint.includes('verificar-token')) {
+      console.log('fetchApi: Resposta para', endpoint, ':', response.status, response.statusText);
+    }
     
     // Verificar se a resposta foi bem-sucedida
     if (!response.ok) {

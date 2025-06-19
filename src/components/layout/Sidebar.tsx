@@ -3,6 +3,7 @@ import { Home, Building2, FileCog, Settings, X, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { cn } from '../../lib/utils';
+import { isAdmin } from '../../services/usuarioService';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -11,19 +12,27 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [mounted, setMounted] = useState(false);
+  const [isUserAdmin, setIsUserAdmin] = useState(false);
   const { darkMode } = useTheme();
 
   useEffect(() => {
     setMounted(true);
+    // Verificar se o usuário é administrador
+    setIsUserAdmin(isAdmin());
   }, []);
 
   if (!mounted) return null;
 
-  const navigation = [
+  // Definir os itens de navegação base
+  const baseNavigation = [
     { name: 'Imóveis', href: '/imoveis', icon: Building2 },
     { name: 'Documentos', href: '/documentos', icon: FileText },
-    { name: 'Configurações', href: '/configuracoes', icon: Settings },
   ];
+  
+  // Adicionar o item de configurações apenas se o usuário for administrador
+  const navigation = isUserAdmin 
+    ? [...baseNavigation, { name: 'Configurações', href: '/configuracoes', icon: Settings }]
+    : baseNavigation;
 
   return (
     <>

@@ -1,13 +1,206 @@
 import { useState, useEffect } from 'react';
+import { Database, User, Folder, Settings, Save, RefreshCw, UserPlus, Edit, Trash2, X, Eye, EyeOff, Plus } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Database, User, UserPlus, Edit, Trash2, Check, X, Eye, EyeOff, Folder, FolderOpen, FileText, Plus } from 'lucide-react';
 import { testConnection } from '../lib/db';
-import { Usuario, UsuarioFormData, Cargo } from '../types/usuario';
-import { listarUsuarios, cadastrarUsuario, atualizarUsuario, excluirUsuario, listarCargos } from '../services/usuarioService';
+import { Usuario, UsuarioFormData } from '../types/usuario';
+import { listarUsuarios, cadastrarUsuario, atualizarUsuario, excluirUsuario } from '../services/usuarioService';
+
+// Interface para diretórios de documentos
+interface DocumentosConfig {
+  diretoriosDocumentos: string[];
+}
+
+// Componente para gerenciar diretórios de documentos
+const DocumentosConfig = () => {
+  const [diretoriosDocumentos, setDiretoriosDocumentos] = useState<string[]>([]);
+  const [novoDiretorio, setNovoDiretorio] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  // Carregar a configuração dos diretórios de documentos
+  useEffect(() => {
+    const carregarDiretorios = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/documentos/config');
+        
+        if (response.ok) {
+          const config: DocumentosConfig = await response.json();
+          setDiretoriosDocumentos(config.diretoriosDocumentos || []);
+        } else {
+          setError('Erro ao carregar configurações de diretórios');
+        }
+      } catch (err) {
+        console.error('Erro ao carregar diretórios:', err);
+        setError('Erro ao carregar diretórios de documentos');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    carregarDiretorios();
+  }, []);
+  
+  // Adicionar um novo diretório
+  const adicionarDiretorio = () => {
+    if (!novoDiretorio) return;
+    if (diretoriosDocumentos.includes(novoDiretorio)) {
+      setError('Este diretório já está na lista');
+      return;
+    }
+    
+    setDiretoriosDocumentos([...diretoriosDocumentos, novoDiretorio]);
+    setNovoDiretorio('');
+    setError(null);
+  };
+  
+  // Remover um diretório
+  const removerDiretorio = (diretorio: string) => {
+    setDiretoriosDocumentos(diretoriosDocumentos.filter(d => d !== diretorio));
+  };
+  
+  // Salvar a configuração
+  const salvarConfiguracao = async () => {
+    try {
+      setIsSaving(true);
+      setError(null);
+      setSaveSuccess(false);
+      
+      const response = await fetch('/api/documentos/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ diretoriosDocumentos }),
+      });
+      
+      if (response.ok) {
+        setSaveSuccess(true);
+        setTimeout(() => {
+          setSaveSuccess(false);
+        }, 3000);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Erro ao salvar configurações de diretórios');
+      }
+    } catch (err) {
+      console.error('Erro ao salvar diretórios:', err);
+      setError('Erro ao salvar diretórios');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">Configuração de Diretórios de Documentos</h2>
+      </div>
+      
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Configure os diretórios onde o sistema deve buscar por documentos. Quando um caminho relativo for informado, 
+          o sistema tentará localizar o arquivo em cada um desses diretórios.  
+        </p>
+        
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <div className="h-2 w-32 bg-blue-600 rounded-full animate-pulse"></div>
+          </div>
+        ) : (
+          <div>
+            {/* Lista de diretórios */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Diretórios configurados:</h3>
+              
+              {diretoriosDocumentos.length === 0 ? (
+                <div className="text-sm text-gray-500 dark:text-gray-400 italic p-2">Nenhum diretório configurado</div>
+              ) : (
+                <ul className="space-y-2">
+                  {diretoriosDocumentos.map((diretorio, index) => (
+                    <li key={index} className="flex items-center justify-between bg-white dark:bg-gray-700 p-2 rounded-md border border-gray-200 dark:border-gray-600">
+                      <div className="flex items-center">
+                        <Folder className="h-5 w-5 text-gray-500 dark:text-gray-200 mr-2" />
+                        <span className="text-sm truncate max-w-md">{diretorio}</span>
+                      </div>
+                      <button 
+                        type="button"
+                        className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-500"
+                        onClick={() => removerDiretorio(diretorio)}
+                        title="Remover diretório"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            
+            {/* Formulário para adicionar diretório */}
+            <div className="mt-4">
+              <label htmlFor="novo-diretorio" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Adicionar novo diretório
+              </label>
+              <div className="mt-1 flex rounded-md shadow-sm">
+                <div className="relative flex items-stretch flex-grow">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Folder className="h-5 w-5 text-gray-400 dark:text-gray-200" />
+                  </div>
+                  <input
+                    type="text"
+                    id="novo-diretorio"
+                    className="input pl-10"
+                    placeholder="Ex: C:\Users\Documentos"
+                    value={novoDiretorio}
+                    onChange={(e) => setNovoDiretorio(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+                  onClick={adicionarDiretorio}
+                >
+                  <Plus className="h-4 w-4 mr-2" />Adicionar
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Digite o caminho completo do diretório</p>
+            </div>
+            
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-md">
+                {error}
+              </div>
+            )}
+            
+            {saveSuccess && (
+              <div className="mt-4 p-3 bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-200 rounded-md">
+                Configurações salvas com sucesso!
+              </div>
+            )}
+            
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className={`btn ${isSaving ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600' : 'btn-primary dark:btn-primary-dark'}`}
+                onClick={salvarConfiguracao}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Salvando...' : 'Salvar Configurações'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function Configuracoes() {
   const { darkMode } = useTheme();
-  const [activeTab, setActiveTab] = useState<'banco' | 'usuarios' | 'documentos'>('banco');
+  const [activeTab, setActiveTab] = useState<'banco' | 'usuarios' | 'documentos' | 'geral'>('banco');
   const [dbConfig, setDbConfig] = useState({
     server: '',
     port: '',
@@ -287,8 +480,12 @@ export default function Configuracoes() {
                 onClick={() => setActiveTab('banco')}
                 className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
                   activeTab === 'banco'
-                    ? 'bg-primary-50 border-primary-600 text-primary-700'
-                    : 'border-transparent text-gray-700 hover:bg-gray-50'
+                    ? darkMode 
+                      ? 'bg-blue-900/20 border-blue-500 text-blue-400'
+                      : 'bg-primary-50 border-primary-600 text-primary-700'
+                    : darkMode
+                      ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
+                      : 'border-transparent text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 <Database className="h-5 w-5" />
@@ -299,12 +496,32 @@ export default function Configuracoes() {
                 onClick={() => setActiveTab('usuarios')}
                 className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
                   activeTab === 'usuarios'
-                    ? 'bg-primary-50 border-primary-600 text-primary-700'
-                    : 'border-transparent text-gray-700 hover:bg-gray-50'
+                    ? darkMode 
+                      ? 'bg-blue-900/20 border-blue-500 text-blue-400'
+                      : 'bg-primary-50 border-primary-600 text-primary-700'
+                    : darkMode
+                      ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
+                      : 'border-transparent text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 <User className="h-5 w-5" />
                 Usuários
+              </button>
+
+              <button
+                onClick={() => setActiveTab('documentos')}
+                className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
+                  activeTab === 'documentos'
+                    ? darkMode 
+                      ? 'bg-blue-900/20 border-blue-500 text-blue-400'
+                      : 'bg-primary-50 border-primary-600 text-primary-700'
+                    : darkMode
+                      ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
+                      : 'border-transparent text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <Folder className="h-5 w-5" />
+                Diretórios de Documentos
               </button>
               
             </nav>
@@ -316,11 +533,11 @@ export default function Configuracoes() {
           <div className="card p-6">
             {activeTab === 'geral' && (
               <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">Configurações Gerais</h2>
+                <h2 className="text-lg font-medium text-gray-900 dark:text-white">Configurações Gerais</h2>
                 
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="system-name" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="system-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Nome do Sistema
                     </label>
                     <input
@@ -360,12 +577,12 @@ export default function Configuracoes() {
             
             {activeTab === 'banco' && (
               <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">Configurações do Banco de Dados</h2>
+                <h2 className="text-lg font-medium text-gray-900 dark:text-white">Configurações do Banco de Dados</h2>
                 
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label htmlFor="db-server" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="db-server" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Servidor
                       </label>
                       <input
@@ -378,7 +595,7 @@ export default function Configuracoes() {
                     </div>
                     
                     <div>
-                      <label htmlFor="db-port" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="db-port" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Porta
                       </label>
                       <input
@@ -391,7 +608,7 @@ export default function Configuracoes() {
                     </div>
                     
                     <div>
-                      <label htmlFor="db-name" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="db-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Nome do Banco
                       </label>
                       <input
@@ -404,7 +621,7 @@ export default function Configuracoes() {
                     </div>
                     
                     <div>
-                      <label htmlFor="db-user" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="db-user" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Usuário
                       </label>
                       <input
@@ -417,7 +634,7 @@ export default function Configuracoes() {
                     </div>
                     
                     <div>
-                      <label htmlFor="db-password" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="db-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Senha
                       </label>
                       <input
@@ -440,7 +657,7 @@ export default function Configuracoes() {
                           options: { ...dbConfig.options, encrypt: e.target.checked }
                         })}
                       />
-                      <label htmlFor="db-encrypt" className="ml-2 block text-sm text-gray-700">
+                      <label htmlFor="db-encrypt" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                         Usar conexão criptografada
                       </label>
                     </div>
@@ -508,7 +725,7 @@ export default function Configuracoes() {
             {activeTab === 'usuarios' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-medium text-gray-900">Gerenciamento de Usuários</h2>
+                  <h2 className="text-lg font-medium text-gray-900 dark:text-white">Gerenciamento de Usuários</h2>
                   <button 
                     type="button" 
                     className="btn btn-primary flex items-center gap-2"
@@ -524,32 +741,32 @@ export default function Configuracoes() {
                 
                 {/* Lista de usuários */}
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuário</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cargo</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Usuário</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cargo</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                       {usuarios.map((usuario) => (
-                        <tr key={usuario.id} className="hover:bg-gray-50">
+                        <tr key={usuario.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{usuario.nome}</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{usuario.nome}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">{usuario.nomeUsuario}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-300">{usuario.nomeUsuario}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${usuario.cargo === 'Administrador' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${usuario.cargo === 'Administrador' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
                               {usuario.cargo}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${usuario.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${usuario.ativo ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
                               {usuario.ativo ? 'Ativo' : 'Inativo'}
                             </span>
                           </td>
@@ -557,13 +774,13 @@ export default function Configuracoes() {
                             <div className="flex space-x-2">
                               <button 
                                 onClick={() => handleEditUsuario(usuario)}
-                                className="text-indigo-600 hover:text-indigo-900"
+                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
                               >
                                 <Edit className="h-4 w-4" />
                               </button>
                               <button 
                                 onClick={() => handleDeleteUsuario(usuario.id)}
-                                className="text-red-600 hover:text-red-900"
+                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -573,7 +790,7 @@ export default function Configuracoes() {
                       ))}
                       {usuarios.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                          <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                             Nenhum usuário encontrado
                           </td>
                         </tr>

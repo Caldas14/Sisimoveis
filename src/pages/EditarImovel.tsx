@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDatabaseStatus } from '../components/DatabaseStatus';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, Save, X, Loader2 } from 'lucide-react';
@@ -66,9 +67,10 @@ const opcoesDeTipoUsoEdificacao = [
 import { obterImovelPorId, listarImoveisPrincipais, atualizarImovel } from '../services/imovelService';
 
 export default function EditarImovel() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { darkMode } = useTheme();
+  const { isConnected } = useDatabaseStatus();
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
   const [imovel, setImovel] = useState(null);
   const [imoveisPrincipais, setImoveisPrincipais] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -150,6 +152,12 @@ export default function EditarImovel() {
   }, [id, reset, navigate]);
   
   const onSubmit = async (data: ImovelFormData) => {
+    // Verificar se o banco de dados está conectado
+    if (!isConnected) {
+      setError('Não é possível editar imóveis enquanto o banco de dados estiver desconectado. Entre em contato com o setor de T.I.');
+      return;
+    }
+    
     try {
       setSalvando(true);
       setError(null);
@@ -163,9 +171,23 @@ export default function EditarImovel() {
           .filter(m => m.length > 0);
       }
       
+      // Tratar o valor da área para garantir que seja enviado com vírgula como separador decimal
+      let areaFormatada = data.area;
+      if (data.area) {
+        // Converter para string se for número
+        const areaStr = data.area.toString();
+        // Se já tiver vírgula, manter como está. Se tiver ponto, converter para vírgula
+        if (areaStr.includes('.')) {
+          areaFormatada = areaStr.replace('.', ',');
+        } else {
+          areaFormatada = areaStr;
+        }
+      }
+      
       // Garantir que os valores de infraestrutura sejam booleanos
       const formData = {
         ...data,
+        area: areaFormatada, // Usar o valor formatado com vírgula
         infraestrutura: {
           agua: Boolean(data.infraestrutura?.agua),
           esgoto: Boolean(data.infraestrutura?.esgoto),
@@ -268,13 +290,17 @@ export default function EditarImovel() {
                   Área Total (m²)*
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   id="area"
                   className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.area ? 'border-danger-500 focus:ring-danger-500' : ''}`}
                   {...register('area', { 
                     required: 'Área é obrigatória',
-                    min: { value: 0.01, message: 'Área deve ser maior que zero' }
+                    validate: (value) => {
+                      // Converte a string para número, tratando vírgula como separador decimal
+                      const areaValue = parseFloat(value.toString().replace(',', '.'));
+                      return !isNaN(areaValue) && areaValue > 0 || 'Área deve ser um número maior que zero';
+                    }
                   })}
                 />
                 {errors.area && (

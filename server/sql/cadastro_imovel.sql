@@ -3,7 +3,7 @@ CREATE OR ALTER PROCEDURE sp_CadastrarImovel
     @Id UNIQUEIDENTIFIER,
     @Matricula NVARCHAR(100),
     @Localizacao NVARCHAR(255),
-    @AreaM2 FLOAT,
+    @AreaM2 NVARCHAR(50),
     @Objeto NVARCHAR(MAX),
     @TipoImovelId INT,
     @FinalidadeId INT,

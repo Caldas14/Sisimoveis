@@ -189,6 +189,63 @@ export async function cadastrarImovel(imovel: ImovelFormData): Promise<string> {
   }
 }
 
+// Mapeamentos de IDs para valores de texto
+const tipoImovelMap: Record<number, string> = {
+  1: 'Residencial',
+  2: 'Comercial',
+  3: 'Industrial',
+  4: 'Rural',
+  5: 'Terreno',
+  6: 'Outros',
+  7: 'Casa',
+  8: 'Apartamento'
+};
+
+const statusTransferenciaMap: Record<number, string> = {
+  1: 'Não transferido',
+  2: 'Em processo',
+  3: 'Transferido',
+  4: 'Cancelado',
+  5: 'Disponível',
+  6: 'Em Transferência',
+  7: 'Não Aplicável',
+  8: 'Pendente',
+  9: 'Regularizado'
+};
+
+const finalidadeMap: Record<number, string> = {
+  1: 'Habitação',
+  2: 'Comércio',
+  3: 'Indústria',
+  4: 'Agricultura',
+  5: 'Serviços',
+  6: 'Misto',
+  7: 'Outros',
+  8: 'Residencial',
+  9: 'Comercial',
+  10: 'Industrial',
+  11: 'Rural'
+};
+
+const tipoPosseMap: Record<number, string> = {
+  1: 'Proprietário',
+  2: 'Locatário',
+  3: 'Comodato',
+  4: 'Outros',
+  6: 'Cedido'
+};
+
+const tipoUsoEdificacaoMap: Record<number, string> = {
+  1: 'Residencial Unifamiliar',
+  2: 'Residencial Multifamiliar',
+  3: 'Comercial',
+  4: 'Industrial',
+  5: 'Misto',
+  6: 'Terreno sem edificação',
+  7: 'Outros',
+  8: 'Residencial'
+};
+
 // Função auxiliar para mapear os dados da API para o formato esperado pelo frontend
 function mapearImovelDaAPI(imovelAPI: any): Imovel {
   console.log('mapearImovelDaAPI: Mapeando imóvel da API:', imovelAPI);
@@ -266,9 +323,12 @@ function mapearImovelDaAPI(imovelAPI: any): Imovel {
     localizacao: imovelAPI.Localizacao || imovelAPI.localizacao || '',
     area: areaValue,
     objeto: imovelAPI.Objeto || imovelAPI.objeto || '',
-    tipoImovel: imovelAPI.TipoImovel || imovelAPI.tipoImovel || 'Outros',
-    finalidade: imovelAPI.Finalidade || imovelAPI.finalidade || 'Outros',
-    statusTransferencia: imovelAPI.StatusTransferencia || imovelAPI.statusTransferencia || 'Não transferido',
+    tipoImovel: imovelAPI.TipoImovel || imovelAPI.tipoImovel || 
+              (imovelAPI.TipoImovelId ? tipoImovelMap[imovelAPI.TipoImovelId] || 'Outros' : 'Outros'),
+    finalidade: imovelAPI.Finalidade || imovelAPI.finalidade || 
+              (imovelAPI.FinalidadeId ? finalidadeMap[imovelAPI.FinalidadeId] || 'Outros' : 'Outros'),
+    statusTransferencia: imovelAPI.StatusTransferencia || imovelAPI.statusTransferencia || 
+                        (imovelAPI.StatusTransferenciaId ? statusTransferenciaMap[imovelAPI.StatusTransferenciaId] || 'Não transferido' : 'Não transferido'),
     imovelPaiId: imovelAPI.ImovelPaiId || imovelAPI.imovelPaiId || null,
     dataCadastro: imovelAPI.DataCadastro || imovelAPI.dataCadastro || '',
     dataAtualizacao: imovelAPI.DataAtualizacao || imovelAPI.dataAtualizacao || '',
@@ -277,8 +337,10 @@ function mapearImovelDaAPI(imovelAPI: any): Imovel {
     latitude: imovelAPI.Latitude || imovelAPI.latitude || 0,
     longitude: imovelAPI.Longitude || imovelAPI.longitude || 0,
     pontoReferencia: imovelAPI.PontoReferencia || imovelAPI.pontoReferencia || '',
-    tipoPosse: imovelAPI.TipoPosse || imovelAPI.tipoPosse || 'Outros',
-    tipoUsoEdificacao: imovelAPI.TipoUsoEdificacao || imovelAPI.tipoUsoEdificacao || 'Outros',
+    tipoPosse: imovelAPI.TipoPosse || imovelAPI.tipoPosse || 
+              (imovelAPI.TipoPosseId ? tipoPosseMap[imovelAPI.TipoPosseId] || 'Outros' : 'Outros'),
+    tipoUsoEdificacao: imovelAPI.TipoUsoEdificacao || imovelAPI.tipoUsoEdificacao || 
+                      (imovelAPI.TipoUsoEdificacaoId ? tipoUsoEdificacaoMap[imovelAPI.TipoUsoEdificacaoId] || 'Outros' : 'Outros'),
     observacao: imovelAPI.Observacao || imovelAPI.observacao || '',
     matriculasOriginadas: imovelAPI.MatriculasOriginadas || imovelAPI.matriculasOriginadas || '',
     documentos: [],
@@ -406,12 +468,36 @@ export interface ImovelSecundarioInfo {
   Objeto: string;
 }
 
+// Interface para informações resumidas de imóveis secundários
+export interface ImovelSecundarioResumo {
+  Id: string;
+  Matricula: string;
+  Objeto: string;
+}
+
+// Função para obter informações resumidas de imóveis secundários vinculados a um imóvel principal
+export async function obterImoveisSecundarios(imovelPaiId: string): Promise<ImovelSecundarioInfo[]> {
+  try {
+    // Usar a função existente para buscar imóveis secundários
+    const secundarios = await listarImoveisSecundarios(imovelPaiId);
+    
+    // Mapear para o formato resumido
+    return secundarios.map(imovel => ({
+      Id: imovel.id,
+      Matricula: imovel.matricula,
+      Objeto: imovel.objeto
+    }));
+  } catch (error) {
+    console.error('Erro ao obter imóveis secundários:', error);
+    return [];
+  }
+}
+
 // Interface para erro de exclusão com imóveis secundários
 export interface ErroExclusaoComSecundarios extends Error {
   secundarios?: ImovelSecundarioInfo[];
 }
 
-// Serviço para excluir um imóvel
 export async function excluirImovel(id: string, excluirSecundarios: boolean = false): Promise<boolean> {
   console.log('excluirImovel: Excluindo imóvel com ID:', id, excluirSecundarios ? 'com secundários' : 'sem secundários');
   
@@ -423,32 +509,50 @@ export async function excluirImovel(id: string, excluirSecundarios: boolean = fa
       throw new Error('Não foi possível excluir o imóvel - Backend não disponível');
     }
     
-    // Se não estamos excluindo em cascata, verificar se o imóvel tem secundários
-    if (!excluirSecundarios) {
-      console.log('excluirImovel: Verificando se o imóvel tem secundários');
-      try {
-        const secundariosResponse = await fetchApi(`/imoveis/${id}/secundarios`);
+    // Importante: sempre verificar se o imóvel tem secundários primeiro
+    try {
+      const secundarios = await listarImoveisSecundarios(id);
+      if (secundarios && secundarios.length > 0) {
+        console.log(`excluirImovel: Imóvel possui ${secundarios.length} secundários`);
         
-        if (secundariosResponse.temSecundarios) {
-          console.log(`excluirImovel: Imóvel tem ${secundariosResponse.count} secundários`);
+        // Se não estamos em modo cascata, não podemos excluir imóvel com secundários
+        if (!excluirSecundarios) {
+          console.log('excluirImovel: Exclusão normal não permitida para imóveis com secundários');
           
           // Criar um erro personalizado com informações sobre os imóveis secundários
-          const erroPersonalizado = new Error(`Este imóvel possui ${secundariosResponse.count} imóveis secundários. Você precisa excluir os imóveis secundários primeiro ou solicitar a exclusão em cascata.`) as ErroExclusaoComSecundarios;
-          erroPersonalizado.secundarios = secundariosResponse.secundarios;
+          const erroPersonalizado = new Error('Este imóvel possui imóveis secundários e não pode ser excluído sem cascata') as ErroExclusaoComSecundarios;
+          erroPersonalizado.secundarios = secundarios.map(item => ({
+            Id: item.id,
+            Matricula: item.matricula,
+            Objeto: item.objeto
+          }));
           throw erroPersonalizado;
         }
-      } catch (err) {
-        if (err instanceof Error && 'secundarios' in err) {
-          // Se o erro já é um ErroExclusaoComSecundarios, apenas propagar
-          throw err;
-        }
-        // Outros erros na verificação de secundários são ignorados e tentamos excluir mesmo assim
-        console.warn('excluirImovel: Erro ao verificar secundários, tentando excluir mesmo assim:', err);
+        
+        console.log('excluirImovel: Prosseguindo com exclusão em cascata');
       }
+    } catch (err) {
+      if (err instanceof Error && 'secundarios' in err) {
+        // Se o erro já é um ErroExclusaoComSecundarios, apenas propagar
+        throw err;
+      }
+      // Outros erros na verificação de secundários são ignorados e tentamos excluir mesmo assim
+      console.warn('excluirImovel: Erro ao verificar secundários, tentando excluir mesmo assim:', err);
     }
     
     // Excluir o imóvel (com ou sem cascata)
-    await fetchApi(`/imoveis/${id}${excluirSecundarios ? '?cascade=true' : ''}`, {
+    console.log(`excluirImovel: Tentando excluir imóvel ${id} com cascata=${excluirSecundarios}`);    
+    
+    // Formato correto para a API
+    let deleteUrl = `/imoveis/${id}`;
+    
+    // Adicionar querystring para exclusão em cascata conforme esperado pela API
+    if (excluirSecundarios) {
+      deleteUrl += '?cascade=true';
+    }
+      
+    console.log(`excluirImovel: Chamando DELETE para URL: ${deleteUrl}`);
+    await fetchApi(deleteUrl, {
       method: 'DELETE'
     });
     
@@ -457,29 +561,48 @@ export async function excluirImovel(id: string, excluirSecundarios: boolean = fa
   } catch (err) {
     console.error('excluirImovel: Erro ao excluir imóvel:', err);
     
-    // Tentar extrair a resposta JSON do erro
+    // Verificar explicitamente se o imóvel tem secundários
     try {
-      if (err instanceof Error && err.message.includes('Erro na API: 400')) {
-        // Tentar obter o corpo da resposta
-        const responseText = await fetch(`${API_URL}/imoveis/${id}`).then(r => r.json());
-        console.log('excluirImovel: Resposta completa do erro:', responseText);
+      // Ao invés de tentar interpretar a resposta de erro, consultamos diretamente os secundários
+      console.log(`excluirImovel: Verificando secundários do imóvel ${id} após erro 400`);
+      
+      // Importante: não deixar o useEmptyData interferir aqui
+      const oldUseEmptyData = useEmptyData;
+      useEmptyData = false;
+      
+      const secundarios = await listarImoveisSecundarios(id);
+      
+      // Restaurar estado anterior
+      useEmptyData = oldUseEmptyData;
+      
+      if (secundarios && secundarios.length > 0) {
+        console.log('excluirImovel: Imóvel possui secundários:', secundarios);
         
-        // Verificar se a resposta contém informações sobre imóveis secundários
-        if (responseText && responseText.secundarios) {
-          console.log('excluirImovel: Imóvel possui secundários:', responseText.secundarios);
-          
-          // Criar um erro personalizado com informações sobre os imóveis secundários
-          const erroPersonalizado = new Error(responseText.message || 'Este imóvel possui imóveis secundários') as ErroExclusaoComSecundarios;
-          erroPersonalizado.secundarios = responseText.secundarios;
-          throw erroPersonalizado;
-        }
+        // Mapear imóveis para o formato esperado por ImovelSecundarioInfo
+        const secundariosInfo: ImovelSecundarioInfo[] = secundarios.map(imovel => ({
+          Id: imovel.id,
+          Matricula: imovel.matricula,
+          Objeto: imovel.objeto
+        }));
+        
+        // Criar um erro personalizado com informações sobre os imóveis secundários
+        const erroPersonalizado = new Error('Este imóvel possui imóveis secundários e não pode ser excluído sem cascata') as ErroExclusaoComSecundarios;
+        erroPersonalizado.secundarios = secundariosInfo;
+        throw erroPersonalizado;
+      } else {
+        console.log('excluirImovel: Nenhum secundário encontrado, mas houve erro 400');
       }
     } catch (parseErr) {
-      console.error('excluirImovel: Erro ao processar resposta de erro:', parseErr);
+      console.error('excluirImovel: Erro ao verificar secundários:', parseErr);
     }
     
-    // Marcar que o backend não está disponível
-    useEmptyData = true;
+    // Não marcamos o backend como indisponível aqui, pois pode ser apenas um erro de validação
+    // Se o problema for com secundários, já temos a verificação anterior
+    if (err instanceof Error && err.message.includes('Erro na API: 500')) {
+      // Apenas marcamos como indisponível para erros de servidor (500)
+      useEmptyData = true;
+    }
+    
     throw new Error(`Erro ao excluir o imóvel: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
   }
 }

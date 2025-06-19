@@ -1,5 +1,6 @@
 import { Menu, Search, LogOut, Moon, Sun } from 'lucide-react';
-import { DatabaseStatus } from '../DatabaseStatus';
+import cehopLogo from '/cropped-cehop123-1.png';
+import { useDatabaseStatus } from '../DatabaseStatus';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../../services/usuarioService';
@@ -14,6 +15,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const [userName, setUserName] = useState('Usuário');
   const [userInitials, setUserInitials] = useState('U');
   const { darkMode, toggleDarkMode } = useTheme();
+  const { isConnected, lastCheck } = useDatabaseStatus();
   
   useEffect(() => {
     try {
@@ -53,10 +55,14 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
             <a 
               href="/" 
-              className="flex items-center text-xl font-bold text-primary-600 hover:text-primary-700 transition-colors"
+              className="flex items-center text-primary-600 hover:text-primary-700 transition-colors"
             >
-              <span className="hidden sm:inline">CEHOP</span>
-              <span className="sm:hidden">CH</span>
+              <img 
+                src={cehopLogo} 
+                alt="CEHOP" 
+                className="h-8 hidden sm:block" 
+              />
+              <span className="sm:hidden text-xl font-bold">CH</span>
             </a>
           </div>
 
@@ -76,7 +82,13 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
           {/* Status do Banco e Usuário */}
           <div className="flex items-center gap-6">
-            <DatabaseStatus />
+            {/* Indicador de status do banco de dados */}
+            <div className="flex items-center gap-2">
+              <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {isConnected ? 'Banco online' : 'Banco offline'}
+              </span>
+            </div>
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-3">

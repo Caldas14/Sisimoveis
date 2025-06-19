@@ -26,7 +26,10 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = 'chave-secreta-do-sistema-cehop'; // Em produção, usar variável de ambiente
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://25.0.62.72:3000', 'http://localhost:5000', 'http://localhost:5173', 'http://25.0.62.72:5000', '*'],
+  credentials: true
+}));
 app.use(bodyParser.json());
 
 // Função para ler configuração do banco
@@ -117,6 +120,31 @@ async function testDatabaseConnection() {
 app.get('/api/test-connection', async (req, res) => {
   const isConnected = await testDatabaseConnection();
   res.json({ success: isConnected });
+});
+
+// Rota para verificar o status do banco de dados
+app.get('/api/db-status', async (req, res) => {
+  try {
+    // Tenta executar uma consulta simples para verificar se o banco está respondendo
+    await poolConnect;
+    const result = await pool.request().query('SELECT GETDATE() as serverTime');
+    
+    // Se chegou até aqui, o banco está online
+    res.json({
+      status: 'online',
+      lastCheck: new Date().toISOString(),
+      serverTime: result.recordset[0].serverTime
+    });
+  } catch (err) {
+    console.error('Erro ao verificar status do banco:', err);
+    
+    // Se ocorreu erro, o banco está offline
+    res.json({
+      status: 'offline',
+      lastCheck: new Date().toISOString(),
+      error: err.message
+    });
+  }
 });
 
 // Função para salvar configuração do banco
@@ -838,17 +866,19 @@ function sanitizeSqlString(str) {
 }
 
 // Função para converter para número ou retornar 0, com limite para evitar overflow
-function toNumberOrZero(val, maxValue = 9999) {
-  if (val === null || val === undefined || val === '') return 0;
+function toNumberOrZero(value, limit = 999999999999999999) {
+  if (value === null || value === undefined) return 0;
   
-  // Remover caracteres não numéricos, exceto ponto decimal
-  const cleanedVal = String(val).replace(/[^0-9.]/g, '');
-  const num = Number(cleanedVal);
+  // Se for string e tiver vírgula, substituir por ponto
+  if (typeof value === 'string' && value.includes(',')) {
+    value = value.replace(',', '.');
+  }
   
+  const num = Number(value);
   if (isNaN(num)) return 0;
   
   // Limitar o valor para evitar overflow
-  return Math.min(num, maxValue);
+  return Math.min(num, limit);
 }
 
 // Rota para buscar imóveis secundários de um imóvel principal
@@ -1027,11 +1057,15 @@ app.post('/api/imoveis', async (req, res) => {
     const matricula = sanitizeSqlString(imovel.matricula);
     const localizacao = sanitizeSqlString(imovel.localizacao);
     const objeto = sanitizeSqlString(imovel.objeto);
-    const area = toNumberOrZero(imovel.area, 999999); // Limite maior para área
-    const valorVenal = toNumberOrZero(imovel.valorVenal, 9999999); // Limite maior para valor venal
+    // Se o valor da área vier como string com vírgula, substituir por ponto para o SQL Server
+    // Senão, converter para número com limite muito alto
+    const area = typeof imovel.area === 'string'
+      ? imovel.area.replace(',', '.') 
+      : toNumberOrZero(imovel.area, 999999999999999999); // Limite muito maior para área
+    const valorVenal = toNumberOrZero(imovel.valorVenal, 999999999999999999); // Limite maior para valor venal
     const registroIPTU = sanitizeSqlString(imovel.registroIPTU);
-    const latitude = toNumberOrZero(imovel.latitude, 90); // Limite para latitude (-90 a 90)
-    const longitude = toNumberOrZero(imovel.longitude, 180); // Limite para longitude (-180 a 180)
+    const latitude = toNumberOrZero(imovel.latitude, 900); // Limite para latitude (-90 a 90)
+    const longitude = toNumberOrZero(imovel.longitude, 1800); // Limite para longitude (-180 a 180)
     const pontoReferencia = sanitizeSqlString(imovel.pontoReferencia);
     const observacao = sanitizeSqlString(imovel.observacao);
     const matriculasOriginadas = sanitizeSqlString(imovel.matriculasOriginadas);
@@ -1073,7 +1107,7 @@ app.post('/api/imoveis', async (req, res) => {
         '${imovelId}', 
         '${matricula}', 
         '${localizacao}', 
-        ${area}, 
+        '${area}', 
         '${objeto}', 
         ${tipoImovelId || 'NULL'}, 
         ${finalidadeId || 'NULL'}, 
@@ -1705,9 +1739,14 @@ async function verificarECriarColunaUsuario() {
 }
 
 // Iniciar o servidor
-app.listen(PORT, async () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`Servidor rodando na porta ${PORT} (acessível na rede local em http://25.0.62.72:${PORT})`);
   await testDatabaseConnection();
   await verificarECriarColunaUsuario();
   console.log('Servidor pronto para receber requisições!');
+});
+
+// Iniciar uma segunda instância para localhost
+const localServer = app.listen(PORT + 1, 'localhost', () => {
+  console.log(`Servidor também está rodando em localhost:${PORT + 1}`);
 });

@@ -163,9 +163,23 @@ export default function CadastroImovel() {
       setErroCadastro(null);
       setSucessoCadastro(null);
       
+      // Tratar o valor da área para garantir que seja enviado com vírgula como separador decimal
+      let areaFormatada = data.area;
+      if (data.area) {
+        // Converter para string se for número
+        const areaStr = data.area.toString();
+        // Se já tiver vírgula, manter como está. Se tiver ponto, converter para vírgula
+        if (areaStr.includes('.')) {
+          areaFormatada = areaStr.replace('.', ',');
+        } else {
+          areaFormatada = areaStr;
+        }
+      }
+      
       // Garantir que os valores de infraestrutura sejam booleanos
       const formData = {
         ...data,
+        area: areaFormatada, // Usar o valor formatado com vírgula
         infraestrutura: {
           agua: Boolean(data.infraestrutura.agua),
           esgoto: Boolean(data.infraestrutura.esgoto),
@@ -335,13 +349,20 @@ export default function CadastroImovel() {
                       Área Total (m²)*
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       id="area"
                       className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.area ? 'border-danger-500 focus:ring-danger-500' : ''}`}
                       {...register('area', { 
                         required: 'Área é obrigatória',
-                        min: { value: 0.01, message: 'Área deve ser maior que zero' }
+                        validate: value => {
+                          // Garantir que value seja tratado como string antes de usar replace
+                          const valueStr = value.toString();
+                          const num = parseFloat(valueStr.replace(',', '.'));
+                          if (isNaN(num)) return 'Digite um número válido';
+                          if (num <= 0) return 'Área deve ser maior que zero';
+                          return true;
+                        }
                       })}
                     />
                     {errors.area && (
