@@ -57,11 +57,13 @@ export default function Header({ onMenuClick }: HeaderProps) {
               href="/" 
               className="flex items-center text-primary-600 hover:text-primary-700 transition-colors"
             >
-              <img 
-                src={cehopLogo} 
-                alt="CEHOP" 
-                className="h-8 hidden sm:block" 
-              />
+              <div className={`${darkMode ? 'bg-white p-1 rounded' : ''} hidden sm:block`}>
+                <img 
+                  src={cehopLogo} 
+                  alt="CEHOP" 
+                  className="h-8" 
+                />
+              </div>
               <span className="sm:hidden text-xl font-bold">CH</span>
             </a>
           </div>

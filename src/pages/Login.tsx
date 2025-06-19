@@ -65,11 +65,13 @@ export default function Login() {
       <div className="max-w-md w-full space-y-6 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700">
         <div className="flex flex-col items-center justify-center">
           <div className="w-full flex justify-center mb-4">
-            <img 
-              src={cehopLogo} 
-              alt="CEHOP Logo" 
-              className="h-20 object-contain"
-            />
+            <div className={`${darkMode ? 'bg-white p-2 rounded-lg' : ''}`}>
+              <img 
+                src={cehopLogo} 
+                alt="CEHOP Logo" 
+                className="h-20 object-contain"
+              />
+            </div>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Sistema de Cadastro de Imóveis
