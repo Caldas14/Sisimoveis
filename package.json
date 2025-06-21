@@ -11,14 +11,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/file-saver": "^2.0.7",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "buffer": "^6.0.3",
     "clsx": "^2.1.0",
     "cors": "^2.8.5",
     "events": "^3.3.0",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "express-fileupload": "^1.5.1",
+    "file-saver": "^2.0.5",
     "http-proxy-middleware": "^3.0.5",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.503.0",
@@ -35,7 +38,9 @@
     "stream-browserify": "^3.0.0",
     "tailwind-merge": "^2.2.2",
     "util": "^0.12.5",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@types/mssql": "^9.1.5",

@@ -3,7 +3,7 @@ import { Database, User, Folder, Settings, Save, RefreshCw, UserPlus, Edit, Tras
 import { useTheme } from '../contexts/ThemeContext';
 import { testConnection } from '../lib/db';
 import { Usuario, UsuarioFormData } from '../types/usuario';
-import { listarUsuarios, cadastrarUsuario, atualizarUsuario, excluirUsuario } from '../services/usuarioService';
+import { listarUsuarios, cadastrarUsuario, atualizarUsuario, excluirUsuario, isUsingMasterCredentials } from '../services/usuarioService';
 
 // Interface para diretórios de documentos
 interface DocumentosConfig {
@@ -460,73 +460,97 @@ export default function Configuracoes() {
     }
   };
   
+  // Verificar se está usando credenciais mestras
+  const usingMasterCredentials = isUsingMasterCredentials();
+  
+  // Se estiver usando credenciais mestras, forçar a tab de banco de dados
+  useEffect(() => {
+    if (usingMasterCredentials) {
+      setActiveTab('banco');
+    }
+  }, [usingMasterCredentials]);
+  
+  // Garantir que não seja possível mudar para outra tab quando estiver usando credenciais mestras
+  useEffect(() => {
+    if (usingMasterCredentials && activeTab !== 'banco') {
+      setActiveTab('banco');
+    }
+  }, [activeTab, usingMasterCredentials]);
+  
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Configurações</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Gerencie as configurações do sistema de cadastro de imóveis.
+          {usingMasterCredentials 
+            ? "Configurações de emergência - Acesso com credenciais mestras" 
+            : "Gerencie as configurações do sistema de cadastro de imóveis."}
         </p>
+        {usingMasterCredentials && (
+          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded-md text-yellow-800">
+            <p className="text-sm font-medium">Modo de emergência ativado</p>
+            <p className="text-xs">Você está usando credenciais mestras. Apenas as configurações do banco de dados estão disponíveis.</p>
+          </div>
+        )}
       </div>
       
       <div className="flex flex-col space-y-6 md:flex-row md:space-y-0 md:space-x-6">
         {/* Sidebar de navegação */}
-        <div className="w-full md:w-64 shrink-0">
-          <div className="card overflow-hidden">
-            <nav className="flex flex-col">
+        {!usingMasterCredentials ? (
+          <div className="w-full md:w-64 shrink-0">
+            <div className="card overflow-hidden">
+              <nav className="flex flex-col">
+                <button
+                  onClick={() => setActiveTab('banco')}
+                  className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
+                    activeTab === 'banco'
+                      ? darkMode 
+                        ? 'bg-blue-900/20 border-blue-500 text-blue-400'
+                        : 'bg-primary-50 border-primary-600 text-primary-700'
+                      : darkMode
+                        ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
+                        : 'border-transparent text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Database className="h-5 w-5" />
+                  Banco de Dados
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('usuarios')}
+                  className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
+                    activeTab === 'usuarios'
+                      ? darkMode 
+                        ? 'bg-blue-900/20 border-blue-500 text-blue-400'
+                        : 'bg-primary-50 border-primary-600 text-primary-700'
+                      : darkMode
+                        ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
+                        : 'border-transparent text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <User className="h-5 w-5" />
+                  Usuários
+                </button>
 
-              
-              <button
-                onClick={() => setActiveTab('banco')}
-                className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
-                  activeTab === 'banco'
-                    ? darkMode 
-                      ? 'bg-blue-900/20 border-blue-500 text-blue-400'
-                      : 'bg-primary-50 border-primary-600 text-primary-700'
-                    : darkMode
-                      ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
-                      : 'border-transparent text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <Database className="h-5 w-5" />
-                Banco de Dados
-              </button>
-              
-              <button
-                onClick={() => setActiveTab('usuarios')}
-                className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
-                  activeTab === 'usuarios'
-                    ? darkMode 
-                      ? 'bg-blue-900/20 border-blue-500 text-blue-400'
-                      : 'bg-primary-50 border-primary-600 text-primary-700'
-                    : darkMode
-                      ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
-                      : 'border-transparent text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <User className="h-5 w-5" />
-                Usuários
-              </button>
-
-              <button
-                onClick={() => setActiveTab('documentos')}
-                className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
-                  activeTab === 'documentos'
-                    ? darkMode 
-                      ? 'bg-blue-900/20 border-blue-500 text-blue-400'
-                      : 'bg-primary-50 border-primary-600 text-primary-700'
-                    : darkMode
-                      ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
-                      : 'border-transparent text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <Folder className="h-5 w-5" />
-                Diretórios de Documentos
-              </button>
-              
-            </nav>
+                <button
+                  onClick={() => setActiveTab('documentos')}
+                  className={`flex items-center gap-2 p-4 text-sm font-medium border-l-4 ${
+                    activeTab === 'documentos'
+                      ? darkMode 
+                        ? 'bg-blue-900/20 border-blue-500 text-blue-400'
+                        : 'bg-primary-50 border-primary-600 text-primary-700'
+                      : darkMode
+                        ? 'border-transparent text-gray-300 hover:bg-gray-700/50'
+                        : 'border-transparent text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Folder className="h-5 w-5" />
+                  Diretórios de Documentos
+                </button>
+              </nav>
+            </div>
           </div>
-        </div>
+        ) : null}
         
         {/* Conteúdo da tab */}
         <div className="flex-1">

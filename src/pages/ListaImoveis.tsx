@@ -1,13 +1,40 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { Link } from 'react-router-dom';
-import { Building2, Plus, FileDown, Search, Loader2, Trash2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Building2, Plus, Search, Loader2, Trash2, AlertCircle, ShieldAlert } from 'lucide-react';
 import { ImovelSecundarioInfo, ErroExclusaoComSecundarios } from '../services/imovelService';
-import { downloadCSV, formatarArea } from '../lib/utils';
+import { formatarArea } from '../lib/utils';
 import { Imovel } from '../types/imovel';
+import { isUsingMasterCredentials } from '../services/usuarioService';
+import ExcelExporterTodosExcelJS from '../components/ExcelExporterTodosExcelJS';
+
+// Componente para exibir mensagem de acesso restrito
+const AcessoRestrito = () => {
+  const navigate = useNavigate();
+  
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[70vh] p-6 animate-fade-in">
+      <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-8 max-w-md w-full text-center">
+        <ShieldAlert className="w-16 h-16 mx-auto text-yellow-600 mb-4" />
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Acesso Restrito</h2>
+        <p className="text-gray-600 mb-6">
+          Esta funcionalidade não está disponível no modo de emergência com credenciais mestras.
+          Apenas as configurações do banco de dados podem ser acessadas neste modo.
+        </p>
+        <div className="flex justify-center">
+          <button 
+            onClick={() => navigate('/configuracoes')}
+            className="btn btn-primary"
+          >
+            Ir para Configurações
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function ListaImoveis() {
-  const { darkMode } = useTheme();
+  const navigate = useNavigate();
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +47,14 @@ export default function ListaImoveis() {
   const [mensagemExclusao, setMensagemExclusao] = useState<{tipo: 'sucesso' | 'erro', texto: string} | null>(null);
   const [imoveisSecundarios, setImoveisSecundarios] = useState<ImovelSecundarioInfo[]>([]);
   const [modoExclusao, setModoExclusao] = useState<'normal' | 'cascata'>('normal');
+  
+  // Verificar se está usando credenciais mestras
+  const usingMasterCredentials = isUsingMasterCredentials();
+  
+  // Se estiver usando credenciais mestras, mostrar mensagem de acesso restrito
+  if (usingMasterCredentials) {
+    return <AcessoRestrito />;
+  }
   
   // Função para verificar se um imóvel tem secundários vinculados
   async function verificarImoveisSecundarios(imovel: Imovel) {
@@ -224,22 +259,7 @@ export default function ListaImoveis() {
     }
   }, [imoveis, busca, filtroTipo, filtroStatus, filtroTipoImovel]);
   
-  // Exportar dados para CSV
-  const exportarParaCSV = () => {
-    const dadosParaExportar = imoveisFiltrados.map(imovel => ({
-      Matrícula: imovel.matricula,
-      Localização: imovel.localizacao,
-      'Área (m²)': imovel.area,
-      Objeto: imovel.objeto,
-      Finalidade: imovel.finalidade,
-      'Tipo de Imóvel': imovel.tipoImovel,
-      'Status de Transferência': imovel.statusTransferencia,
-      'Imóvel Principal': imovel.imovelPaiId === null ? 'Sim' : 'Não',
-      'ID do Imóvel Pai': imovel.imovelPaiId || 'N/A'
-    }));
-    
-    downloadCSV(dadosParaExportar, 'imoveis.csv');
-  };
+  // Função para exportar dados para Excel já implementada no componente ExcelExporterTodos
   
   return (
     <div className="space-y-6 animate-fade-in">
@@ -340,13 +360,10 @@ export default function ListaImoveis() {
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Gerencie todos os imóveis principais e secundários</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={exportarParaCSV}
-              className="px-4 py-2.5 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700 rounded-lg shadow-sm hover:bg-blue-50 dark:hover:bg-gray-700 transition-all duration-200 flex items-center justify-center hover:scale-105"
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              Exportar CSV
-            </button>
+            <ExcelExporterTodosExcelJS
+              imoveis={imoveis}
+              buttonText="Exportar Excel"
+            />
             
             <Link to="/imoveis/cadastro" className="px-4 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg shadow-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors duration-200 inline-flex items-center">
               <Plus className="mr-2 h-4 w-4" />

@@ -342,7 +342,22 @@ function mapearImovelDaAPI(imovelAPI: any): Imovel {
     tipoUsoEdificacao: imovelAPI.TipoUsoEdificacao || imovelAPI.tipoUsoEdificacao || 
                       (imovelAPI.TipoUsoEdificacaoId ? tipoUsoEdificacaoMap[imovelAPI.TipoUsoEdificacaoId] || 'Outros' : 'Outros'),
     observacao: imovelAPI.Observacao || imovelAPI.observacao || '',
-    matriculasOriginadas: imovelAPI.MatriculasOriginadas || imovelAPI.matriculasOriginadas || '',
+    // Debug detalhado para o campo matriculasOriginadas
+    matriculasOriginadas: (() => {
+      console.log('Checando valores possíveis para matriculasOriginadas:', {
+        MatriculasOriginadas: imovelAPI.MatriculasOriginadas,
+        matriculasOriginadas: imovelAPI.matriculasOriginadas,
+        MatrículasOriginadas: imovelAPI.MatrículasOriginadas, // versão com acento
+        matrículasOriginadas: imovelAPI.matrículasOriginadas, // versão com acento
+      });
+      
+      // Verificar todos os possíveis nomes de propriedade
+      return imovelAPI.MatriculasOriginadas || 
+             imovelAPI.matriculasOriginadas ||
+             imovelAPI.MatrículasOriginadas || 
+             imovelAPI.matrículasOriginadas ||
+             '';
+    })(),
     documentos: [],
     areaDesmembrada: parseFloat(String(imovelAPI.AreaDesmembrada || 0)) || 0,
     areaRemanescente: parseFloat(String(imovelAPI.AreaRemanescente || 0)) || 0,
@@ -440,17 +455,34 @@ export async function buscarImoveisSecundarios(imovelPaiId: number | string): Pr
     const imoveisAPI = await fetchApi(`/imoveis/${imovelPaiId}/secundarios/completo`);
     console.log('buscarImoveisSecundarios: Dados brutos da API:', imoveisAPI);
     
-    // Mapear os dados da API para o formato esperado pelo frontend
-    const imoveis = Array.isArray(imoveisAPI) 
-      ? imoveisAPI.map(imovelAPI => mapearImovelDaAPI(imovelAPI))
-      : [];
+    // Para cada imóvel secundário, buscar os detalhes completos para obter o campo matriculasOriginadas
+    const imovesDetalhados = [];
     
-    console.log('buscarImoveisSecundarios: Imóveis secundários mapeados:', imoveis.length);
-    if (imoveis.length > 0) {
-      console.log('buscarImoveisSecundarios: Exemplo de imóvel secundário:', imoveis[0]);
+    // Se temos imóveis secundários da API
+    if (Array.isArray(imoveisAPI) && imoveisAPI.length > 0) {
+      console.log(`buscarImoveisSecundarios: Obtendo detalhes completos para ${imoveisAPI.length} imóveis secundários`);
+      
+      // Para cada imóvel secundário da lista
+      for (const imovelSecundario of imoveisAPI) {
+        // Tentar obter os dados completos do imóvel
+        try {
+          const imovelCompleto = await fetchApi(`/imoveis/${imovelSecundario.Id || imovelSecundario.id}`);
+          console.log(`buscarImoveisSecundarios: Detalhes completos para o imóvel secundário ${imovelSecundario.Id || imovelSecundario.id}:`, imovelCompleto);
+          imovesDetalhados.push(mapearImovelDaAPI(imovelCompleto));
+        } catch (err) {
+          // Se falhar, usar o mapeamento original
+          console.error(`Erro ao obter detalhes do imóvel secundário ${imovelSecundario.Id || imovelSecundario.id}:`, err);
+          imovesDetalhados.push(mapearImovelDaAPI(imovelSecundario));
+        }
+      }
     }
     
-    return imoveis;
+    console.log('buscarImoveisSecundarios: Imóveis secundários mapeados:', imovesDetalhados.length);
+    if (imovesDetalhados.length > 0) {
+      console.log('buscarImoveisSecundarios: Exemplo de imóvel secundário detalhado:', imovesDetalhados[0]);
+    }
+    
+    return imovesDetalhados;
   } catch (err) {
     console.error('buscarImoveisSecundarios: Erro ao buscar imóveis secundários:', err);
     

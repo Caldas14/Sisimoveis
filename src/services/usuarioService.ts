@@ -7,8 +7,46 @@ const dadosVazios: Usuario[] = [];
 // Variáveis para controlar o comportamento do serviço
 let useMockData = false; // Controla se devemos usar dados mockados em vez da API
 
+// Credenciais mestras para acesso de emergência quando o backend estiver indisponível
+const MASTER_CREDENTIALS = {
+  nomeUsuario: 'Admin',
+  senha: 'admcehop'
+};
+
 // Função para fazer login
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
+  // Verificar se são as credenciais mestras
+  if (credentials.nomeUsuario === MASTER_CREDENTIALS.nomeUsuario && 
+      credentials.senha === MASTER_CREDENTIALS.senha) {
+    console.log('Usando credenciais mestras para acesso de emergência');
+    
+    // Criar um token fictício para autenticação offline
+    const masterToken = 'master_emergency_access_token';
+    
+    // Criar dados de usuário administrador para acesso offline
+    const masterUser: Usuario = {
+      id: 'master_admin',
+      nome: 'Administrador Mestre',
+      nomeUsuario: 'Admin',
+      cargoId: 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF',
+      cargo: 'Administrador',
+      ativo: true
+    };
+    
+    // Salvar no localStorage
+    localStorage.setItem('authToken', masterToken);
+    localStorage.setItem('userData', JSON.stringify(masterUser));
+    localStorage.setItem('usingMasterCredentials', 'true');
+    
+    // Retornar resposta simulando uma resposta do servidor
+    return {
+      success: true,
+      token: masterToken,
+      usuario: masterUser,
+      message: 'Login com credenciais mestras realizado com sucesso'
+    } as LoginResponse;
+  }
+  
   try {
     const response = await fetchApi('/usuarios/login', {
       method: 'POST',
@@ -22,16 +60,23 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
     
     if (response.usuario) {
       localStorage.setItem('userData', JSON.stringify(response.usuario));
+      localStorage.removeItem('usingMasterCredentials'); // Remover flag de credenciais mestras
     }
     
     return response;
   } catch (err) {
     console.error('Erro ao fazer login:', err);
     
+    // Verificar novamente as credenciais mestras como fallback
+    // Isso permite que as credenciais mestras funcionem mesmo se o usuário tentar fazer login normal
+    // e o backend estiver indisponível
+    if (credentials.nomeUsuario === MASTER_CREDENTIALS.nomeUsuario && 
+        credentials.senha === MASTER_CREDENTIALS.senha) {
+      return login(credentials); // Chamar recursivamente para usar o caminho das credenciais mestras
+    }
+    
     // Erro de login, não há fallback para login
     throw new Error('Falha na autenticação');
-    
-    throw err;
   }
 }
 
@@ -39,11 +84,17 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
 export function logout(): void {
   localStorage.removeItem('authToken');
   localStorage.removeItem('userData');
+  localStorage.removeItem('usingMasterCredentials');
 }
 
 // Função para verificar se o usuário está autenticado
 export function isAuthenticated(): boolean {
   return !!localStorage.getItem('authToken');
+}
+
+// Função para verificar se está usando credenciais mestras
+export function isUsingMasterCredentials(): boolean {
+  return localStorage.getItem('usingMasterCredentials') === 'true';
 }
 
 // Função para verificar se o usuário é administrador
@@ -102,6 +153,12 @@ export function getCurrentUser(): { id: string; nome: string; nomeUsuario: strin
 // Função para verificar se o token ainda é válido no backend
 export async function verificarToken(): Promise<boolean> {
   try {
+    // Verificar primeiro se está usando credenciais mestras
+    if (isUsingMasterCredentials()) {
+      console.log('Usando credenciais mestras, token considerado válido sem verificação no backend');
+      return true; // Token mestre é sempre válido
+    }
+
     const token = getAuthToken();
     if (!token) {
       return false;
@@ -118,13 +175,26 @@ export async function verificarToken(): Promise<boolean> {
     return response.valid === true;
   } catch (err) {
     console.error('Erro ao verificar token:', err);
-    // Se houver erro na verificação, consideramos o token inválido
+    
+    // Se houver erro na verificação, verificar se são as credenciais mestras
+    if (isUsingMasterCredentials()) {
+      console.log('Erro na verificação do token, mas usando credenciais mestras, token considerado válido');
+      return true;
+    }
+    
+    // Se não são credenciais mestras, consideramos o token inválido
     return false;
   }
 }
 
 // Função para verificar a sessão localmente (fallback quando o backend não está disponível)
 export function verificarSessaoLocal(): boolean {
+  // Verificar primeiro se está usando credenciais mestras
+  if (isUsingMasterCredentials()) {
+    console.log('Usando credenciais mestras, sessão local considerada válida');
+    return true; // Sessão mestra é sempre válida localmente
+  }
+  
   const token = getAuthToken();
   const userData = getCurrentUser();
   
@@ -133,6 +203,27 @@ export function verificarSessaoLocal(): boolean {
 
 // Função para listar todos os usuários (apenas admin)
 export async function listarUsuarios(): Promise<Usuario[]> {
+  // Verificar se está usando credenciais mestras
+  if (isUsingMasterCredentials()) {
+    console.log('Usando credenciais mestras para listar usuários');
+    
+    // Quando estiver usando credenciais mestras, retornar apenas o usuário administrador mestre
+    // Isso evita tentar acessar o backend quando ele estiver indisponível
+    const masterUser: Usuario = {
+      id: 'master_admin',
+      nome: 'Administrador Mestre',
+      nomeUsuario: 'Admin',
+      cargoId: 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF',
+      cargo: 'Administrador',
+      ativo: true,
+      dataCriacao: new Date().toISOString(),
+      dataAtualizacao: new Date().toISOString(),
+      ultimoLogin: new Date().toISOString()
+    };
+    
+    return [masterUser];
+  }
+  
   try {
     const response = await fetchApi('/usuarios', {
       method: 'GET',
@@ -145,32 +236,12 @@ export async function listarUsuarios(): Promise<Usuario[]> {
   } catch (err) {
     console.error('Erro ao listar usuários:', err);
     
-    if (useMockData) {
-      // Mock de resposta para desenvolvimento
-      return [
-        {
-          id: '1',
-          nome: 'Administrador',
-          nomeUsuario: 'admin',
-          cargo: 'Administrador',
-          ativo: true,
-          dataCriacao: new Date().toISOString(),
-          dataAtualizacao: new Date().toISOString(),
-          ultimoLogin: new Date().toISOString()
-        },
-        {
-          id: '2',
-          nome: 'Usuário Teste',
-          nomeUsuario: 'usuario',
-          cargo: 'Usuário',
-          ativo: true,
-          dataCriacao: new Date().toISOString(),
-          dataAtualizacao: new Date().toISOString(),
-          ultimoLogin: null
-        }
-      ];
+    // Verificar novamente se são credenciais mestras como fallback
+    if (isUsingMasterCredentials()) {
+      return listarUsuarios(); // Chamar recursivamente para usar o caminho das credenciais mestras
     }
     
+    // Não usar dados mockados, lançar o erro para tratamento adequado
     throw err;
   }
 }

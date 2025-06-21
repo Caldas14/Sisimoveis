@@ -3,12 +3,13 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   Building2, Edit, ChevronRight, 
-  Trash2, FileDown, Plus, File, Loader2,
-  Check, X, AlertTriangle, FileSpreadsheet, FileBadge
+  Trash2, Plus, Loader2,
+  Check, X, AlertTriangle, FileText
 } from 'lucide-react';
-import { formatarData, formatarArea, downloadFormatadoCSV } from '../lib/utils';
+import { formatarData, formatarArea } from '../lib/utils';
 import { Imovel } from '../types/imovel';
 import DocumentosImovel from '../components/DocumentosImovel';
+import ExcelExporterExcelJS from '../components/ExcelExporterExcelJS';
 
 export default function DetalhesImovel() {
   const navigate = useNavigate();
@@ -23,8 +24,7 @@ export default function DetalhesImovel() {
   const [excluindo, setExcluindo] = useState(false);
   const [mensagemExclusao, setMensagemExclusao] = useState<{tipo: 'sucesso' | 'erro', texto: string} | null>(null);
   const [contagemDocumentos, setContagemDocumentos] = useState<number>(0);
-  // Estado para controlar o modal de exportação
-  const [mostrarModalExportacao, setMostrarModalExportacao] = useState<boolean>(false);
+  // Removido estado para modal de exportação CSV
 
   // Definir a função global para atualizar a contagem de documentos
   useEffect(() => {
@@ -128,124 +128,7 @@ export default function DetalhesImovel() {
     carregarDados();
   }, [id]);
 
-  // Define as seções para exportação
-  const definirSecoesExportacao = () => {
-    return [
-      {
-        titulo: 'Informações Gerais',
-        campos: [
-          'Matrícula', 'Tipo de Imóvel', 'Objeto', 'Finalidade', 
-          'Área (m²)', 'Data de Cadastro', 'Imóvel Principal'
-        ]
-      },
-      {
-        titulo: 'Detalhes Legais e Financeiros',
-        campos: [
-          'Tipo de Posse', 'Status de Transferência', 
-          'Tipo de Uso', 'Valor Venal', 'Registro IPTU'
-        ]
-      },
-      {
-        titulo: 'Localização',
-        campos: [
-          'Localização', 'Ponto de Referência', 
-          'Latitude', 'Longitude'
-        ]
-      },
-      {
-        titulo: 'Infraestrutura',
-        campos: [
-          'Água', 'Esgoto', 'Energia', 
-          'Pavimentação', 'Iluminação', 'Coleta de Lixo'
-        ]
-      }
-    ];
-  };
-
-  // Preparar dados do imóvel para exportação
-  const prepararDadosImovel = (imoveisParaExportar: Imovel[]) => {
-    return imoveisParaExportar.map(i => ({
-      'Matrícula': i.matricula,
-      'Localização': i.localizacao,
-      'Área (m²)': formatarArea(i.area).replace(' m²', ''),
-      'Objeto': i.objeto,
-      'Finalidade': i.finalidade,
-      'Tipo de Imóvel': i.tipoImovel,
-      'Status de Transferência': i.statusTransferencia,
-      'Tipo de Posse': i.tipoPosse,
-      'Tipo de Uso': i.tipoUsoEdificacao,
-      'Valor Venal': i.valorVenal ? `R$ ${parseFloat(String(i.valorVenal)).toLocaleString('pt-BR')}` : 'Não informado',
-      'Registro IPTU': i.registroIPTU || 'Não informado',
-      'Ponto de Referência': i.pontoReferencia || 'Não informado',
-      'Latitude': i.latitude || 'Não informado',
-      'Longitude': i.longitude || 'Não informado',
-      'Água': i.infraestrutura?.agua ? 'Sim' : 'Não',
-      'Esgoto': i.infraestrutura?.esgoto ? 'Sim' : 'Não',
-      'Energia': i.infraestrutura?.energia ? 'Sim' : 'Não',
-      'Pavimentação': i.infraestrutura?.pavimentacao ? 'Sim' : 'Não',
-      'Iluminação': i.infraestrutura?.iluminacao ? 'Sim' : 'Não',
-      'Coleta de Lixo': i.infraestrutura?.coletaLixo ? 'Sim' : 'Não',
-      'Imóvel Principal': i.imovelPaiId === null ? 'Sim' : 'Não',
-      'Data de Cadastro': formatarData(i.dataCadastro || new Date())
-    }));
-  };
-
-  // Funções de exportação
-  const exportarApenasImovelPrincipal = () => {
-    if (!imovel) return;
-    
-    const dadosParaExportar = prepararDadosImovel([imovel]);
-    const secoes = definirSecoesExportacao();
-    
-    downloadFormatadoCSV(dadosParaExportar, `imovel-${imovel.matricula}`, {
-      secoes: secoes,
-      corTitulos: '#2563EB',
-      corCabecalhos: '#4CAF50',
-      tituloRelatorio: `Relatório Detalhado - Imóvel ${imovel.matricula}`
-    });
-    
-    setMostrarModalExportacao(false);
-  };
-
-  const exportarImovelComSecundarios = () => {
-    if (!imovel) return;
-    
-    const todosImoveis = [imovel, ...imoveisSecundarios];
-    const dadosParaExportar = prepararDadosImovel(todosImoveis);
-    
-    // Para múltiplos imóveis, usamos formato tabular com cabeçalho personalizado
-    downloadFormatadoCSV(dadosParaExportar, `imovel-${imovel.matricula}-com-secundarios`, {
-      corTitulos: '#2563EB',
-      corCabecalhos: '#4CAF50',
-      tituloRelatorio: `Relatório Completo - Imóvel ${imovel.matricula} e Secundários (${imoveisSecundarios.length})`
-    });
-    
-    setMostrarModalExportacao(false);
-  };
-
-  // Função principal de exportação que decide o fluxo
-  const exportarParaCSV = () => {
-    if (!imovel) return;
-    
-    // Se é um imóvel secundário OU é principal sem secundários, exporta direto
-    if (imovel.imovelPaiId !== null || imoveisSecundarios.length === 0) {
-      const dadosParaExportar = prepararDadosImovel([imovel]);
-      const secoes = definirSecoesExportacao();
-      
-      // Define um título específico dependendo se é imóvel secundário ou principal
-      const tipoImovel = imovel.imovelPaiId !== null ? 'Secundário' : 'Principal';
-      
-      downloadFormatadoCSV(dadosParaExportar, `imovel-${imovel.matricula}`, {
-        secoes: secoes,
-        corTitulos: '#2563EB',
-        corCabecalhos: '#4CAF50',
-        tituloRelatorio: `Relatório de Imóvel ${tipoImovel} - Matrícula ${imovel.matricula}`
-      });
-    } else {
-      // É um imóvel principal com secundários, mostrar modal de escolha
-      setMostrarModalExportacao(true);
-    }
-  };
+  // Funções de exportação removidas
 
   if (loading) {
     return (
@@ -321,52 +204,7 @@ export default function DetalhesImovel() {
         </div>
       )}
       
-      {/* Modal para escolha do tipo de exportação */}
-      {mostrarModalExportacao && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
-          <div className={`w-full max-w-md rounded-lg p-6 shadow-xl ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-            <div className="mb-4 flex items-center">
-              <FileSpreadsheet className="mr-2 h-6 w-6 text-blue-500" />
-              <h3 className={`text-lg font-medium ${darkMode ? 'text-gray-100' : ''}`}>Opções de Exportação</h3>
-            </div>
-            
-            <p className={`mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-              Como deseja exportar o imóvel <strong>{imovel?.matricula}</strong>?
-            </p>
-            
-            <div className="flex flex-col space-y-3">
-              <button
-                onClick={exportarApenasImovelPrincipal}
-                className={`flex items-center rounded px-4 py-2 transition-colors ${
-                  darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                }`}
-              >
-                <File className="mr-2 h-5 w-5" />
-                Apenas Imóvel Principal
-              </button>
-              
-              <button
-                onClick={exportarImovelComSecundarios}
-                className={`flex items-center rounded px-4 py-2 transition-colors ${
-                  darkMode ? 'bg-indigo-900 text-white hover:bg-indigo-800' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                }`}
-              >
-                <FileBadge className="mr-2 h-5 w-5" />
-                Imóvel Principal + {imoveisSecundarios.length} Secundário{imoveisSecundarios.length !== 1 ? 's' : ''}
-              </button>
-            </div>
-            
-            <div className="mt-6 flex justify-end border-t pt-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}">
-              <button
-                onClick={() => setMostrarModalExportacao(false)}
-                className={`rounded px-4 py-2 ${darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de exportação CSV removido */}
       
       {/* Modal de confirmação de exclusão do imóvel principal */}
       {imovelParaExcluir && (
@@ -473,13 +311,14 @@ export default function DetalhesImovel() {
           </div>
           
           <div className="flex flex-wrap gap-2">
-            <button 
-              onClick={exportarParaCSV}
-              className={`px-4 py-2 border rounded-lg shadow-sm transition-colors duration-200 flex items-center ${darkMode ? 'bg-gray-900 text-blue-400 border-blue-900 hover:bg-gray-800' : 'bg-white text-blue-600 border-blue-300 hover:bg-blue-50'}`}
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              Exportar CSV
-            </button>
+            {/* Botão para exportar para Excel - apenas para imóveis primários */}
+            {imovel.imovelPaiId === null && (
+              <ExcelExporterExcelJS 
+                imovel={imovel} 
+                imoveisSecundarios={imoveisSecundarios} 
+                buttonText="Exportar Excel"
+              />
+            )}
             
             <Link to={`/imoveis/${id}/editar`} className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 transition-colors duration-200 flex items-center">
               <Edit className="mr-2 h-4 w-4" />
@@ -720,7 +559,7 @@ function DetalhesTab({ imovel, imoveisSecundarios = [] }: { imovel: Imovel, imov
       {/* Objeto e Observação */}
       <div className={`rounded-xl shadow-sm p-6 border-t-4 border-indigo-500 ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
         <h3 className={`text-lg font-semibold mb-4 pb-2 border-b flex items-center ${darkMode ? 'text-indigo-300 border-gray-700' : 'text-indigo-800 border-gray-100'}`}>
-          <File className="h-5 w-5 mr-2 text-indigo-500" />
+          <FileText className="h-5 w-5 mr-2 text-indigo-500" />
           Descrição
         </h3>
         <div className="space-y-6">
@@ -742,7 +581,7 @@ function DetalhesTab({ imovel, imoveisSecundarios = [] }: { imovel: Imovel, imov
       {ehImovelPrincipal && (
         <div className={`rounded-xl shadow-sm p-6 border-t-4 ${temInconsistenciaArea ? 'border-yellow-500' : 'border-green-500'} ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
           <h3 className={`text-lg font-semibold mb-4 pb-2 border-b flex items-center ${temInconsistenciaArea ? (darkMode ? 'text-yellow-400' : 'text-yellow-800') : (darkMode ? 'text-green-400' : 'text-green-800')} ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
-            <File className={`h-5 w-5 mr-2 ${temInconsistenciaArea ? 'text-yellow-500' : 'text-green-500'}`} />
+            <FileText className={`h-5 w-5 mr-2 ${temInconsistenciaArea ? 'text-yellow-500' : 'text-green-500'}`} />
             Resumo de Áreas {temInconsistenciaArea && '(Inconsistência Detectada)'}
           </h3>
           
@@ -998,7 +837,7 @@ function DocumentosTab({ imovel }: { imovel: Imovel }) {
   const { darkMode } = useTheme();
   const [imoveisSecundarios, setImoveisSecundarios] = useState<Imovel[]>([]);
   const [carregandoSecundarios, setCarregandoSecundarios] = useState(false);
-  const [totalDocumentos, setTotalDocumentos] = useState(0); // Mantida para uso interno
+  // Estado de totalDocumentos removido pois não estava sendo utilizado
   const [documentosPorImovel, setDocumentosPorImovel] = useState<Record<string, number>>({});
   const [mostrarDocumentosSecundarios, setMostrarDocumentosSecundarios] = useState<Record<string, boolean>>({});
   
@@ -1041,8 +880,6 @@ function DocumentosTab({ imovel }: { imovel: Imovel }) {
       return sum + (count || 0);
     }, 0) - (documentosPorImovel[imovel.id] || 0); // Subtrair o valor antigo do principal
     
-    setTotalDocumentos(total);
-    
     // Atualizar a contagem global de documentos
     if (window.atualizarContagemDocumentos) {
       window.atualizarContagemDocumentos(total);
@@ -1057,7 +894,7 @@ function DocumentosTab({ imovel }: { imovel: Imovel }) {
       
       // Recalcular total
       const total = Object.values(novoState).reduce((sum, count) => sum + (count || 0), 0);
-      setTotalDocumentos(total);
+      // Remoção da atualização de totalDocumentos que não é mais utilizada
       
       // Atualizar contagem global
       if (window.atualizarContagemDocumentos) {

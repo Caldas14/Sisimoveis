@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   FileText, 
   ChevronRight, 
@@ -17,8 +17,10 @@ import {
   Home,
   Loader2,
   AlertCircle,
-  Settings
+  Settings,
+  ShieldAlert
 } from 'lucide-react';
+import { isUsingMasterCredentials } from '../services/usuarioService';
 
 // Interface para documento vinculado a imóvel
 interface DocumentoVinculado {
@@ -55,7 +57,34 @@ interface ImovelPrincipal {
   imoveisSecundarios: ImovelSecundario[];
 }
 
+// Componente para exibir mensagem de acesso restrito
+const AcessoRestrito = () => {
+  const navigate = useNavigate();
+  
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[70vh] p-6 animate-fade-in">
+      <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-8 max-w-md w-full text-center">
+        <ShieldAlert className="w-16 h-16 mx-auto text-yellow-600 mb-4" />
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Acesso Restrito</h2>
+        <p className="text-gray-600 mb-6">
+          Esta funcionalidade não está disponível no modo de emergência com credenciais mestras.
+          Apenas as configurações do banco de dados podem ser acessadas neste modo.
+        </p>
+        <div className="flex justify-center">
+          <button 
+            onClick={() => navigate('/configuracoes')}
+            className="btn btn-primary"
+          >
+            Ir para Configurações
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Documentos() {
+  const navigate = useNavigate();
   const { darkMode } = useTheme();
   const [documentosPrincipais, setDocumentosPrincipais] = useState<DocumentoVinculado[]>([]);
   const [documentosSecundarios, setDocumentosSecundarios] = useState<DocumentoVinculado[]>([]);
@@ -64,6 +93,14 @@ export default function Documentos() {
   const [carregando, setCarregando] = useState<boolean>(true);
   const [erro, setErro] = useState<string | null>(null);
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
+  
+  // Verificar se está usando credenciais mestras
+  const usingMasterCredentials = isUsingMasterCredentials();
+  
+  // Se estiver usando credenciais mestras, mostrar mensagem de acesso restrito
+  if (usingMasterCredentials) {
+    return <AcessoRestrito />;
+  }
   
   // Estados para os filtros
   const [filtroTipoImovel, setFiltroTipoImovel] = useState<'todos' | 'principal' | 'secundario'>('todos');
