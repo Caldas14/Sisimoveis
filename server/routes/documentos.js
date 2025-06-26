@@ -134,7 +134,7 @@ export default function(pool, poolConnect) {
 
           d.DataCriacao,
           i.Matricula as MatriculaImovel
-        FROM DocumentosImoveis d
+        FROM Documentos d
         LEFT JOIN Imoveis i ON d.ImovelId = i.Id
         ORDER BY d.DataCriacao DESC
       `);
@@ -147,6 +147,63 @@ export default function(pool, poolConnect) {
   });
   
   // Rota para listar documentos por imóvel
+  // Rota para listar todos os documentos
+  router.get('/todos', async (req, res) => {
+    try {
+      await poolConnect;
+      console.log('Listando todos os documentos');
+      
+      const result = await pool.request().query(`
+        SELECT 
+          d.Id, 
+          d.ImovelId, 
+          d.Caminho, 
+          d.Nome, 
+          d.DataCriacao,
+          i.Matricula,
+          i.Objeto,
+          i.Localizacao
+        FROM Documentos d
+        LEFT JOIN Imoveis i ON d.ImovelId = i.Id
+        ORDER BY d.DataCriacao DESC
+      `);
+      
+      res.json(result.recordset);
+    } catch (err) {
+      console.error('Erro ao listar todos os documentos:', err);
+      res.status(500).json({ error: 'Erro ao listar todos os documentos' });
+    }
+  });
+
+  // Rota para listar documentos vinculados
+  router.get('/todos-vinculados', async (req, res) => {
+    try {
+      await poolConnect;
+      console.log('Listando documentos vinculados');
+      
+      const result = await pool.request().query(`
+        SELECT 
+          d.Id, 
+          d.ImovelId, 
+          d.Caminho, 
+          d.Nome, 
+          d.DataCriacao,
+          i.Matricula,
+          i.Objeto,
+          i.Localizacao,
+          i.TipoImovel
+        FROM Documentos d
+        INNER JOIN Imoveis i ON d.ImovelId = i.Id
+        ORDER BY d.DataCriacao DESC
+      `);
+      
+      res.json(result.recordset);
+    } catch (err) {
+      console.error('Erro ao listar documentos vinculados:', err);
+      res.status(500).json({ error: 'Erro ao listar documentos vinculados' });
+    }
+  });
+
   router.get('/imovel/:id', async (req, res) => {
     try {
       await poolConnect;
@@ -161,7 +218,7 @@ export default function(pool, poolConnect) {
           d.Nome, 
 
           d.DataCriacao
-        FROM DocumentosImoveis d
+        FROM Documentos d
         WHERE d.ImovelId = '${req.params.id}'
         ORDER BY d.DataCriacao DESC
       `);
@@ -198,7 +255,7 @@ export default function(pool, poolConnect) {
           i.Localizacao,
           i.ImovelPaiId,
           CASE WHEN i.ImovelPaiId IS NULL THEN 'Principal' ELSE 'Secundário' END AS TipoImovel
-        FROM DocumentosImoveis d
+        FROM Documentos d
         INNER JOIN Imoveis i ON d.ImovelId = i.Id
         WHERE 
           d.Nome LIKE '%${termo}%' OR 
@@ -233,7 +290,7 @@ export default function(pool, poolConnect) {
 
           d.DataCriacao,
           i.Matricula as MatriculaImovel
-        FROM DocumentosImoveis d
+        FROM Documentos d
         LEFT JOIN Imoveis i ON d.ImovelId = i.Id
         WHERE d.Id = '${req.params.id}'
       `);
@@ -326,7 +383,7 @@ export default function(pool, poolConnect) {
         .input('imovelId', sql.UniqueIdentifier, imovelId)
         .input('caminho', sql.NVarChar, caminhoNormalizado)
         .query(`
-          SELECT COUNT(*) as count FROM DocumentosImoveis 
+          SELECT COUNT(*) as count FROM Documentos 
           WHERE ImovelId = @imovelId AND Caminho = @caminho
         `);
       
@@ -336,15 +393,15 @@ export default function(pool, poolConnect) {
       
       // Usando valor fixo para o campo Tipo enquanto não alteramos a estrutura da tabela
       
-      // Inserir o documento na tabela DocumentosImoveis
+      // Inserir o documento na tabela Documentos
       const result = await pool.request()
         .input('imovelId', sql.UniqueIdentifier, imovelId)
         .input('caminho', sql.NVarChar, caminhoNormalizado)
         .input('nome', sql.NVarChar, nomeDocumentoFinal)
         .query(`
-          INSERT INTO DocumentosImoveis (ImovelId, Caminho, Nome, Tipo)
+          INSERT INTO Documentos (ImovelId, Caminho, Nome)
           OUTPUT INSERTED.*
-          VALUES (@imovelId, @caminho, @nome, 'Documento')
+          VALUES (@imovelId, @caminho, @nome)
         `);
       
       if (result.recordset.length === 0) {
@@ -372,7 +429,7 @@ export default function(pool, poolConnect) {
       
       // Verificar se o documento existe
       const checkResult = await pool.request().query(`
-        SELECT * FROM DocumentosImoveis WHERE Id = '${req.params.id}'
+        SELECT * FROM Documentos WHERE Id = '${req.params.id}'
       `);
       
       if (checkResult.recordset.length === 0) {
@@ -381,7 +438,7 @@ export default function(pool, poolConnect) {
       
       // Excluir o documento
       await pool.request().query(`
-        DELETE FROM DocumentosImoveis WHERE Id = '${req.params.id}'
+        DELETE FROM Documentos WHERE Id = '${req.params.id}'
       `);
       
       res.json({ success: true, message: 'Documento desvinculado com sucesso' });
@@ -403,8 +460,8 @@ export default function(pool, poolConnect) {
           i.Id, 
           i.Matricula, 
           i.Localizacao,
-          i.TipoImovelId,
-          i.FinalidadeId
+          i.TipoImovel,
+          i.Finalidade
         FROM Imoveis i
         WHERE i.ImovelPaiId IS NULL
       `);
@@ -427,7 +484,7 @@ export default function(pool, poolConnect) {
             i.Localizacao,
             i.ImovelPaiId,
             CASE WHEN i.ImovelPaiId IS NULL THEN 'Principal' ELSE 'Secundário' END AS TipoImovel
-          FROM DocumentosImoveis d
+          FROM Documentos d
           INNER JOIN Imoveis i ON d.ImovelId = i.Id
           WHERE d.ImovelId = '${imovelPrincipal.Id}'
         `);
@@ -438,8 +495,8 @@ export default function(pool, poolConnect) {
             i.Id, 
             i.Matricula, 
             i.Localizacao,
-            i.TipoImovelId,
-            i.FinalidadeId
+            i.TipoImovel,
+            i.Finalidade
           FROM Imoveis i
           WHERE i.ImovelPaiId = '${imovelPrincipal.Id}'
         `);
@@ -462,7 +519,7 @@ export default function(pool, poolConnect) {
               i.Localizacao,
               i.ImovelPaiId,
               'Secundário' AS TipoImovel
-            FROM DocumentosImoveis d
+            FROM Documentos d
             INNER JOIN Imoveis i ON d.ImovelId = i.Id
             WHERE d.ImovelId = '${imovelSecundario.Id}'
           `);

@@ -138,8 +138,8 @@ export default function(pool, poolConnect) {
           i.Id, 
           i.Matricula, 
           i.Localizacao,
-          i.TipoImovelId,
-          i.FinalidadeId
+          i.TipoImovel,
+          i.Finalidade
         FROM Imoveis i
         WHERE i.ImovelPaiId IS NULL
       `);
@@ -162,8 +162,9 @@ export default function(pool, poolConnect) {
             i.Objeto,
             i.Localizacao,
             i.ImovelPaiId,
-            CASE WHEN i.ImovelPaiId IS NULL THEN 'Principal' ELSE 'Secundário' END AS TipoImovel
-          FROM DocumentosImoveis d
+            CASE WHEN i.ImovelPaiId IS NULL THEN 'Principal' ELSE 'Secundário' END AS TipoRelacao,
+            i.TipoImovel
+          FROM Documentos d
           INNER JOIN Imoveis i ON d.ImovelId = i.Id
           WHERE d.ImovelId = '${imovelPrincipal.Id}'
         `);
@@ -174,8 +175,8 @@ export default function(pool, poolConnect) {
             i.Id, 
             i.Matricula, 
             i.Localizacao,
-            i.TipoImovelId,
-            i.FinalidadeId
+            i.TipoImovel,
+            i.Finalidade
           FROM Imoveis i
           WHERE i.ImovelPaiId = '${imovelPrincipal.Id}'
         `);
@@ -198,8 +199,9 @@ export default function(pool, poolConnect) {
               i.Objeto,
               i.Localizacao,
               i.ImovelPaiId,
-              'Secundário' AS TipoImovel
-            FROM DocumentosImoveis d
+              'Secundário' AS TipoRelacao,
+              i.TipoImovel
+            FROM Documentos d
             INNER JOIN Imoveis i ON d.ImovelId = i.Id
             WHERE d.ImovelId = '${imovelSecundario.Id}'
           `);
@@ -240,13 +242,13 @@ export default function(pool, poolConnect) {
       const caminhoNormalizado = normalizarCaminho(caminho, isAbsolutePath);
       const nomeDocumento = nome || path.basename(caminhoNormalizado);
       
-      // Inserir na tabela DocumentosImoveis
+      // Inserir na tabela Documentos
       const result = await pool.request()
         .input('ImovelId', imovelId)
         .input('Caminho', caminhoNormalizado)
         .input('Nome', nomeDocumento)
         .query(`
-          INSERT INTO DocumentosImoveis (ImovelId, Caminho, Nome)
+          INSERT INTO Documentos (ImovelId, Caminho, Nome)
           VALUES (@ImovelId, @Caminho, @Nome);
           SELECT SCOPE_IDENTITY() AS Id;
         `);
@@ -281,7 +283,7 @@ export default function(pool, poolConnect) {
         .input('ImovelId', id)
         .query(`
           SELECT Id, ImovelId, Caminho, Nome, DataCriacao
-          FROM DocumentosImoveis
+          FROM Documentos
           WHERE ImovelId = @ImovelId
           ORDER BY DataCriacao DESC
         `);
@@ -301,7 +303,7 @@ export default function(pool, poolConnect) {
       const result = await pool.request().query(`
         SELECT d.Id, d.ImovelId, d.Caminho, d.Nome, d.DataCriacao,
                i.Objeto, i.Matricula, i.ImovelPaiId
-        FROM DocumentosImoveis d
+        FROM Documentos d
         JOIN Imoveis i ON d.ImovelId = i.Id
         ORDER BY d.DataCriacao DESC
       `);
@@ -323,7 +325,7 @@ export default function(pool, poolConnect) {
       const result = await pool.request()
         .input('Id', id)
         .query(`
-          DELETE FROM DocumentosImoveis
+          DELETE FROM Documentos
           WHERE Id = @Id
         `);
       

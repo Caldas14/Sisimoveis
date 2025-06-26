@@ -1,81 +1,312 @@
 import { useState, useEffect } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
 import { useForm } from 'react-hook-form';
-import { Link } from 'react-router-dom';
-import { ChevronRight, Save, X, Loader2, CheckCircle2, FileText, Upload, Plus } from 'lucide-react';
-import DocumentosImovel from '../components/DocumentosImovel';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronRight, Save, X, Loader2, CheckCircle2, FileText, Plus, AlertCircle, PlusCircle } from 'lucide-react';
+import CustomValueModal from '../components/CustomValueModal';
+import CustomizableSelect from '../components/CustomizableSelect';
+import { buscarValoresPersonalizados, combinarValores, adicionarValorPersonalizado, excluirValorPersonalizado, OpcaoSelect } from '../services/valoresPersonalizadosService';
+// import DocumentosImovel from '../components/DocumentosImovel'; // Não utilizado no momento
 import { 
   ImovelFormData, Imovel
 } from '../types/imovel';
+import { useTheme } from '../contexts/ThemeContext';
+import { verificarMatriculaExistente } from '../services/imovelService';
+
 // Opções para os selects com valores exatos do banco de dados
 const opcoesDeFinaldiade = [
-  { value: 'Habitação', label: 'Habitação' },
-  { value: 'Comércio', label: 'Comércio' },
-  { value: 'Indústria', label: 'Indústria' },
   { value: 'Agricultura', label: 'Agricultura' },
-  { value: 'Serviços', label: 'Serviços' },
-  { value: 'Misto', label: 'Misto' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Residencial', label: 'Residencial' },
   { value: 'Comercial', label: 'Comercial' },
+  { value: 'Comércio', label: 'Comércio' },
+  { value: 'Habitação', label: 'Habitação' },
   { value: 'Industrial', label: 'Industrial' },
-  { value: 'Rural', label: 'Rural' }
+  { value: 'Indústria', label: 'Indústria' },
+  { value: 'Misto', label: 'Misto' },
+  { value: 'Residencial', label: 'Residencial' },
+  { value: 'Rural', label: 'Rural' },
+  { value: 'Serviços', label: 'Serviços' },
+  { value: 'Outros', label: 'Outros' }
 ];
 
 const opcoesDeTipoImovel = [
-  { value: 'Residencial', label: 'Residencial' },
+  { value: 'Apartamento', label: 'Apartamento' },
+  { value: 'Casa', label: 'Casa' },
   { value: 'Comercial', label: 'Comercial' },
   { value: 'Industrial', label: 'Industrial' },
+  { value: 'Residencial', label: 'Residencial' },
   { value: 'Rural', label: 'Rural' },
   { value: 'Terreno', label: 'Terreno' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Casa', label: 'Casa' },
-  { value: 'Apartamento', label: 'Apartamento' }
+  { value: 'Outros', label: 'Outros' }
 ];
 
 const opcoesDeStatusTransferencia = [
-  { value: 'Não transferido', label: 'Não transferido' },
-  { value: 'Em processo', label: 'Em processo' },
-  { value: 'Transferido', label: 'Transferido' },
   { value: 'Cancelado', label: 'Cancelado' },
   { value: 'Disponível', label: 'Disponível' },
+  { value: 'Em processo', label: 'Em processo' },
   { value: 'Em Transferência', label: 'Em Transferência' },
   { value: 'Não Aplicável', label: 'Não Aplicável' },
+  { value: 'Não transferido', label: 'Não transferido' },
   { value: 'Pendente', label: 'Pendente' },
-  { value: 'Regularizado', label: 'Regularizado' }
+  { value: 'Regularizado', label: 'Regularizado' },
+  { value: 'Transferido', label: 'Transferido' }
 ];
 
 const opcoesDeTipoPosse = [
-  { value: 'Proprietário', label: 'Proprietário' },
-  { value: 'Locatário', label: 'Locatário (Alugado)' },
+  { value: 'Cedido', label: 'Cedido' },
   { value: 'Comodato', label: 'Comodato' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Cedido', label: 'Cedido' }
+  { value: 'Locatário', label: 'Locatário (Alugado)' },
+  { value: 'Proprietário', label: 'Proprietário' },
+  { value: 'Outros', label: 'Outros' }
 ];
 
 const opcoesDeTipoUsoEdificacao = [
-  { value: 'Residencial Unifamiliar', label: 'Residencial Unifamiliar' },
-  { value: 'Residencial Multifamiliar', label: 'Residencial Multifamiliar' },
   { value: 'Comercial', label: 'Comercial' },
   { value: 'Industrial', label: 'Industrial' },
   { value: 'Misto', label: 'Misto' },
+  { value: 'Residencial', label: 'Residencial' },
+  { value: 'Residencial Multifamiliar', label: 'Residencial Multifamiliar' },
+  { value: 'Residencial Unifamiliar', label: 'Residencial Unifamiliar' },
   { value: 'Terreno sem edificação', label: 'Terreno sem edificação' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Residencial', label: 'Residencial' }
+  { value: 'Outros', label: 'Outros' }
 ];
 
 export default function CadastroImovel() {
   const { darkMode } = useTheme();
+  const [documentosSelecionados, setDocumentosSelecionados] = useState<{arquivo: File}[]>([]);
+  const [arquivoParaAdicionar, setArquivoParaAdicionar] = useState<File | null>(null);
+  const [mostrarSeletorDocumento, setMostrarSeletorDocumento] = useState(false);
+  const [cadastrando, setCadastrando] = useState(false);
+  const [erroCadastro, setErroCadastro] = useState<string | null>(null);
+  const [sucessoCadastro, setSucessoCadastro] = useState<string | null>(null);
+  const [verificandoMatricula, setVerificandoMatricula] = useState(false);
+  const [matriculaExistente, setMatriculaExistente] = useState(false);
+  const [matriculaVerificada, setMatriculaVerificada] = useState<string>('');
+  // Este estado é usado para controlar a exibição da seção de documentos
+  const [mostrarDocumentos, setMostrarDocumentos] = useState(false);
+  // O ID do imóvel cadastrado é usado na função onSubmit, então mantenha-o
+  const [imovelCadastradoId, setImovelCadastradoId] = useState<string | null>(null);
   const [imoveisPrincipais, setImoveisPrincipais] = useState<Imovel[]>([]);
   const [carregandoImoveisPrincipais, setCarregandoImoveisPrincipais] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
   
-  // Carregar imóveis principais do banco de dados
+  // Estados para os valores personalizados
+  const [opcoesFinaldiade, setOpcoesFinaldiade] = useState<OpcaoSelect[]>(opcoesDeFinaldiade);
+  const [opcoesTipoImovel, setOpcoesTipoImovel] = useState<OpcaoSelect[]>(opcoesDeTipoImovel);
+  const [opcoesTipoUsoEdificacao, setOpcoesTipoUsoEdificacao] = useState<OpcaoSelect[]>(opcoesDeTipoUsoEdificacao);
+  const [opcoesTipoPosse, setOpcoesTipoPosse] = useState<OpcaoSelect[]>(opcoesDeTipoPosse);
+  const [opcoesStatusTransferencia, setOpcoesStatusTransferencia] = useState<OpcaoSelect[]>(opcoesDeStatusTransferencia);
+  
+  // Estados para o modal de valores personalizados
+  const [modalAberto, setModalAberto] = useState(false);
+  const [tituloModal, setTituloModal] = useState('');
+  const [categoriaAtual, setCategoriaAtual] = useState('');
+  const [carregandoValoresPersonalizados, setCarregandoValoresPersonalizados] = useState(false);
+  
+  // Função para abrir o modal de valor personalizado
+  const abrirModalValorPersonalizado = (categoria: string) => {
+    const titulos: Record<string, string> = {
+      'Finalidade': 'Nova Finalidade',
+      'TipoImovel': 'Novo Tipo de Imóvel',
+      'TipoUsoEdificacao': 'Novo Tipo de Uso da Edificação',
+      'TipoPosse': 'Novo Tipo de Posse',
+      'StatusTransferencia': 'Novo Status de Transferência'
+    };
+    
+    setTituloModal(titulos[categoria] || `Novo ${categoria}`);
+    setCategoriaAtual(categoria);
+    setModalAberto(true);
+  };
+  
+  // Função para adicionar um novo valor personalizado
+  const adicionarNovoValor = async (categoria: string, valor: string) => {
+    if (!valor.trim()) return;
+    
+    try {
+      setCarregandoValoresPersonalizados(true);
+      // Adicionar o valor personalizado
+      await adicionarValorPersonalizado(categoria, valor.trim());
+      
+      // Buscar valores personalizados atualizados após a adição
+      const valoresAtualizados = await buscarValoresPersonalizados(categoria);
+      console.log(`Valores personalizados atualizados para ${categoria}:`, valoresAtualizados);
+      
+      // Encontrar o valor recém-adicionado nos valores atualizados
+      const novoValorAdicionado = valoresAtualizados.find(v => 
+        (v.valor || v.Valor) === valor.trim()
+      );
+      
+      if (novoValorAdicionado) {
+        const valorLabel = novoValorAdicionado.valor || novoValorAdicionado.Valor;
+        
+        // Atualizar as opções do select correspondente
+        switch (categoria) {
+          case 'Finalidade':
+            setOpcoesFinaldiade(combinarValores(opcoesDeFinaldiade, valoresAtualizados));
+            // Forçar a atualização do valor selecionado no formulário
+            setTimeout(() => {
+              // Usar any para contornar a tipagem estrita
+              setValue('finalidade', valorLabel as any);
+            }, 100);
+            break;
+          case 'TipoImovel':
+            setOpcoesTipoImovel(combinarValores(opcoesDeTipoImovel, valoresAtualizados));
+            setTimeout(() => {
+              setValue('tipoImovel', valorLabel as any);
+            }, 100);
+            break;
+          case 'TipoUsoEdificacao':
+            setOpcoesTipoUsoEdificacao(combinarValores(opcoesDeTipoUsoEdificacao, valoresAtualizados));
+            setTimeout(() => {
+              setValue('tipoUsoEdificacao', valorLabel as any);
+            }, 100);
+            break;
+          case 'TipoPosse':
+            setOpcoesTipoPosse(combinarValores(opcoesDeTipoPosse, valoresAtualizados));
+            setTimeout(() => {
+              setValue('tipoPosse', valorLabel as any);
+            }, 100);
+            break;
+          case 'StatusTransferencia':
+            setOpcoesStatusTransferencia(combinarValores(opcoesDeStatusTransferencia, valoresAtualizados));
+            setTimeout(() => {
+              setValue('statusTransferencia', valorLabel as any);
+            }, 100);
+            break;
+        }
+      } else {
+        // Se não encontrar o valor adicionado, apenas atualiza as opções
+        switch (categoria) {
+          case 'Finalidade':
+            setOpcoesFinaldiade(combinarValores(opcoesDeFinaldiade, valoresAtualizados));
+            break;
+          case 'TipoImovel':
+            setOpcoesTipoImovel(combinarValores(opcoesDeTipoImovel, valoresAtualizados));
+            break;
+          case 'TipoUsoEdificacao':
+            setOpcoesTipoUsoEdificacao(combinarValores(opcoesDeTipoUsoEdificacao, valoresAtualizados));
+            break;
+          case 'TipoPosse':
+            setOpcoesTipoPosse(combinarValores(opcoesDeTipoPosse, valoresAtualizados));
+            break;
+          case 'StatusTransferencia':
+            setOpcoesStatusTransferencia(combinarValores(opcoesDeStatusTransferencia, valoresAtualizados));
+            break;
+        }
+      }
+      
+      // Mostrar mensagem de sucesso temporária
+      console.log(`Valor personalizado '${valor}' adicionado com sucesso para ${categoria}`);
+    } catch (error) {
+      console.error(`Erro ao adicionar valor personalizado para ${categoria}:`, error);
+    } finally {
+      setCarregandoValoresPersonalizados(false);
+    }
+  };
+  
+  // Função para excluir um valor personalizado
+  const handleDeleteCustomValue = async (categoria: string, valorToDelete: string) => {
+    try {
+      console.log(`Excluindo valor personalizado: ${valorToDelete} da categoria ${categoria}`);
+      
+      // Buscar os valores personalizados para encontrar o ID do valor a ser excluído
+      const valoresPersonalizados = await buscarValoresPersonalizados(categoria);
+      const valorToExclude = valoresPersonalizados.find(v => 
+        (v.Valor || v.valor) === valorToDelete
+      );
+      
+      if (!valorToExclude) {
+        console.error(`Valor personalizado ${valorToDelete} não encontrado`);
+        return;
+      }
+      
+      const valorId = valorToExclude.Id || valorToExclude.id;
+      
+      if (!valorId) {
+        console.error('ID do valor personalizado não encontrado');
+        return;
+      }
+      
+      // Excluir o valor personalizado
+      await excluirValorPersonalizado(valorId);
+      
+      // Atualizar a lista de valores personalizados
+      switch (categoria) {
+        case 'Finalidade':
+          setOpcoesFinaldiade(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'TipoImovel':
+          setOpcoesTipoImovel(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'TipoUsoEdificacao':
+          setOpcoesTipoUsoEdificacao(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'TipoPosse':
+          setOpcoesTipoPosse(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'StatusTransferencia':
+          setOpcoesStatusTransferencia(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+      }
+      
+      console.log(`Valor personalizado ${valorToDelete} excluído com sucesso`);
+    } catch (error) {
+      console.error('Erro ao excluir valor personalizado:', error);
+    }
+  };
+  
+  // Carregar imóveis principais e valores personalizados do banco de dados
   useEffect(() => {
     carregarImoveisPrincipais();
+    carregarValoresPersonalizados();
   }, []);
   
+  // Função para carregar valores personalizados de todas as categorias
+  async function carregarValoresPersonalizados() {
+    setCarregandoValoresPersonalizados(true);
+    
+    const categorias = ['Finalidade', 'TipoImovel', 'TipoUsoEdificacao', 'TipoPosse', 'StatusTransferencia'];
+    
+    try {
+      // Carregar valores personalizados para cada categoria
+      for (const categoria of categorias) {
+        try {
+          const valoresPersonalizados = await buscarValoresPersonalizados(categoria);
+          
+          console.log(`Valores personalizados recebidos para ${categoria}:`, valoresPersonalizados);
+          
+          // Atualizar o estado correspondente com os valores combinados
+          switch (categoria) {
+            case 'Finalidade':
+              setOpcoesFinaldiade(combinarValores(opcoesDeFinaldiade, valoresPersonalizados));
+              console.log('Valores personalizados de Finalidade atualizados:', opcoesFinaldiade);
+              break;
+            case 'TipoImovel':
+              setOpcoesTipoImovel(combinarValores(opcoesDeTipoImovel, valoresPersonalizados));
+              console.log('Valores personalizados de TipoImovel atualizados:', opcoesTipoImovel);
+              break;
+            case 'TipoUsoEdificacao':
+              setOpcoesTipoUsoEdificacao(combinarValores(opcoesDeTipoUsoEdificacao, valoresPersonalizados));
+              console.log('Valores personalizados de TipoUsoEdificacao atualizados:', opcoesTipoUsoEdificacao);
+              break;
+            case 'TipoPosse':
+              setOpcoesTipoPosse(combinarValores(opcoesDeTipoPosse, valoresPersonalizados));
+              console.log('Valores personalizados de TipoPosse atualizados:', opcoesTipoPosse);
+              break;
+            case 'StatusTransferencia':
+              setOpcoesStatusTransferencia(combinarValores(opcoesDeStatusTransferencia, valoresPersonalizados));
+              console.log('Valores personalizados de StatusTransferencia atualizados:', opcoesStatusTransferencia);
+              break;
+          }
+        } catch (error) {
+          console.error(`Erro ao carregar valores personalizados para ${categoria}:`, error);
+        }
+      }
+    } finally {
+      setCarregandoValoresPersonalizados(false);
+    }
+  }
+  
   // Valores padrão para o formulário - centralizados para evitar duplicação
+  // Valores padrão vazios para o formulário
   const defaultFormValues: ImovelFormData = {
     matricula: '',
     localizacao: '',
@@ -83,9 +314,9 @@ export default function CadastroImovel() {
     objeto: '',
     matriculasOriginadas: '',
     observacao: '',
-    finalidade: 'Habitação', // Usando um valor válido do tipo Finalidade
-    tipoImovel: 'Residencial', // Usando um valor válido do tipo TipoImovel
-    statusTransferencia: 'Não transferido', // Usando um valor válido do tipo StatusTransferencia
+    finalidade: undefined as any, // Campo vazio
+    tipoImovel: undefined as any, // Campo vazio
+    statusTransferencia: undefined as any, // Campo vazio
     imovelPaiId: null,
     infraestrutura: {
       agua: false,
@@ -97,26 +328,49 @@ export default function CadastroImovel() {
     },
     valorVenal: undefined as any,
     registroIPTU: '',
-    latitude: '' as any, // Convertido para any porque o tipo é number
-    longitude: '' as any, // Convertido para any porque o tipo é number
-    tipoUsoEdificacao: 'Residencial Unifamiliar', // Usando um valor válido do tipo TipoUsoEdificacao
-    tipoPosse: 'Proprietário', // Usando um valor válido do tipo TipoPosse
+    latitude: undefined as any, // Campo vazio
+    longitude: undefined as any, // Campo vazio
+    tipoUsoEdificacao: undefined as any, // Campo vazio
+    tipoPosse: undefined as any, // Campo vazio
     pontoReferencia: ''
   };
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<ImovelFormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue } = useForm<ImovelFormData>({
     defaultValues: defaultFormValues
   });
   
-  const [cadastrando, setCadastrando] = useState(false);
-  const [erroCadastro, setErroCadastro] = useState<string | null>(null);
-  const [sucessoCadastro, setSucessoCadastro] = useState<string | null>(null);
-  const [imovelCadastradoId, setImovelCadastradoId] = useState<string | null>(null);
-  const [mostrarDocumentos, setMostrarDocumentos] = useState(false);
-  const [documentosSelecionados, setDocumentosSelecionados] = useState<{arquivo: File}[]>([]);
-  const [arquivoParaAdicionar, setArquivoParaAdicionar] = useState<File | null>(null);
-  const [mostrarSeletorDocumento, setMostrarSeletorDocumento] = useState<boolean>(false);
+  // Observar o campo matrícula para validação em tempo real
+  const matriculaAtual = watch('matricula');
   
+  // Efeito para verificar se a matrícula já existe quando o usuário digitar
+  useEffect(() => {
+    const verificarMatricula = async () => {
+      // Verificar apenas se o campo não estiver vazio e se for diferente da última matrícula verificada
+      if (matriculaAtual && matriculaAtual.trim() !== '' && matriculaAtual !== matriculaVerificada) {
+        setVerificandoMatricula(true);
+        try {
+          const existe = await verificarMatriculaExistente(matriculaAtual);
+          setMatriculaExistente(existe);
+          setMatriculaVerificada(matriculaAtual);
+        } catch (error) {
+          console.error('Erro ao verificar matrícula:', error);
+        } finally {
+          setVerificandoMatricula(false);
+        }
+      } else if (matriculaAtual === '') {
+        // Resetar o estado quando o campo estiver vazio
+        setMatriculaExistente(false);
+        setMatriculaVerificada('');
+      }
+    };
+    
+    // Usar um temporizador para evitar muitas requisições enquanto o usuário digita
+    const timer = setTimeout(verificarMatricula, 500);
+    return () => clearTimeout(timer);
+  }, [matriculaAtual, matriculaVerificada]);
+  
+
+
   // Função para adicionar um documento à lista de documentos selecionados
   const adicionarDocumento = () => {
     if (!arquivoParaAdicionar) return;
@@ -159,6 +413,13 @@ export default function CadastroImovel() {
   
   const onSubmit = async (data: ImovelFormData) => {
     try {
+      // Verificar novamente se a matrícula já existe antes de enviar o formulário
+      const matriculaJaExiste = await verificarMatriculaExistente(data.matricula);
+      if (matriculaJaExiste) {
+        setErroCadastro('A matrícula informada já está cadastrada no sistema.');
+        return;
+      }
+      
       setCadastrando(true);
       setErroCadastro(null);
       setSucessoCadastro(null);
@@ -214,26 +475,27 @@ export default function CadastroImovel() {
         
         // Para cada documento selecionado, vinculá-lo ao imóvel
         for (const docItem of documentosSelecionados) {
+          // Definir variáveis no escopo externo para acesso no bloco catch
+          let caminhoDocumento = '';
+          let nomeDocumento = '';
+          
           try {
-            // Obter o arquivo e o tipo de documento
-            const arquivo = docItem.arquivo;
-            
-            // Obter o caminho completo do arquivo se disponível
-            let caminhoDocumento = '';
+            // Obter o arquivo do documento
+            const arquivoFile = docItem.arquivo; // Acessar o objeto File dentro do documento
             
             // Verificar se temos acesso ao caminho completo (propriedade path)
-            if ((arquivo as any).path) {
+            if ((arquivoFile as any).path) {
               // Usar o caminho completo se disponível
-              caminhoDocumento = (arquivo as any).path;
+              caminhoDocumento = (arquivoFile as any).path;
               console.log('Usando caminho completo do arquivo:', caminhoDocumento);
             } else {
               // Caso contrário, usar o nome do arquivo
-              caminhoDocumento = arquivo.name;
+              caminhoDocumento = arquivoFile.name;
               console.log('Usando apenas o nome do arquivo:', caminhoDocumento);
             }
             
             // Garantir que temos um nome de arquivo válido
-            const nomeDocumento = arquivo.name;
+            const nomeDocumento = arquivoFile.name;
             
             // Verificar se o caminho já é absoluto
             const isAbsolutePath = caminhoDocumento.match(/^([A-Za-z]:\|\\|\/)/); 
@@ -260,10 +522,11 @@ export default function CadastroImovel() {
             });
             
             if (!response.ok) {
-              console.error(`Erro ao vincular documento ${arquivo.name}: ${response.status}`);
+              console.error(`Erro ao vincular documento ${nomeDocumento}: ${response.status}`);
             }
           } catch (err) {
-            console.error(`Erro ao vincular documento ${arquivo.name}:`, err);
+            // Usar nome do documento que já foi extraído anteriormente
+            console.error(`Erro ao vincular documento:`, err);
           }
         }
       }
@@ -333,14 +596,29 @@ export default function CadastroImovel() {
                     <label htmlFor="matricula" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                       Matrícula*
                     </label>
-                    <input
-                      type="text"
-                      id="matricula"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.matricula ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                      {...register('matricula', { required: 'Matrícula é obrigatória' })}
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="matricula"
+                        className={`input mt-1 pr-10 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.matricula ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'border-danger-500 focus:ring-danger-500' : ''}`}
+                        {...register('matricula', { required: 'Matrícula é obrigatória' })}
+                      />
+                      {verificandoMatricula && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/3">
+                          <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                        </div>
+                      )}
+                      {matriculaExistente && !verificandoMatricula && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/3">
+                          <AlertCircle className="h-5 w-5 text-danger-500" />
+                        </div>
+                      )}
+                    </div>
                     {errors.matricula && (
                       <p className="mt-1 text-xs text-danger-600">{errors.matricula.message}</p>
+                    )}
+                    {matriculaExistente && !verificandoMatricula && (
+                      <p className="mt-1 text-xs text-danger-600">Esta matrícula já está cadastrada no sistema.</p>
                     )}
                   </div>
                   
@@ -352,7 +630,8 @@ export default function CadastroImovel() {
                       type="text"
                       inputMode="decimal"
                       id="area"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.area ? 'border-danger-500 focus:ring-danger-500' : ''}`}
+                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.area ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                       {...register('area', { 
                         required: 'Área é obrigatória',
                         validate: value => {
@@ -369,7 +648,6 @@ export default function CadastroImovel() {
                       <p className="mt-1 text-xs text-danger-600">{errors.area.message}</p>
                     )}
                   </div>
-
                   <div>
                     <label htmlFor="registroIPTU" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                       Registro IPTU
@@ -377,7 +655,8 @@ export default function CadastroImovel() {
                     <input
                       type="text"
                       id="registroIPTU"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                       {...register('registroIPTU')}
                     />
                   </div>
@@ -390,7 +669,8 @@ export default function CadastroImovel() {
                       type="number"
                       step="0.01"
                       id="valorVenal"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                       {...register('valorVenal')}
                     />
                   </div>
@@ -399,16 +679,31 @@ export default function CadastroImovel() {
                     <label htmlFor="finalidade" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                       Finalidade*
                     </label>
-                    <select
-                      id="finalidade"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.finalidade ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                      {...register('finalidade', { required: 'Finalidade é obrigatória' })}
-                    >
-                      <option value="" disabled>Selecione uma finalidade</option>
-                      {opcoesDeFinaldiade.map((opcao) => (
-                        <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <CustomizableSelect
+                        id="finalidade"
+                        name="finalidade"
+                        value={watch('finalidade') || ''}
+                        onChange={(e) => {
+                          const event = { target: { name: 'finalidade', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                          register('finalidade', { required: 'Finalidade é obrigatória' }).onChange(event);
+                        }}
+                        options={opcoesFinaldiade}
+                        className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.finalidade ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        placeholder="Selecione uma finalidade"
+                        disabled={matriculaExistente || verificandoMatricula}
+                        required
+                        onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('Finalidade', deletedValue)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => abrirModalValorPersonalizado('Finalidade')}
+                        className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                        disabled={matriculaExistente || verificandoMatricula || carregandoValoresPersonalizados}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                     {errors.finalidade && (
                       <p className="mt-1 text-xs text-danger-600">{errors.finalidade.message}</p>
                     )}
@@ -418,16 +713,31 @@ export default function CadastroImovel() {
                     <label htmlFor="tipoImovel" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                       Tipo do Imóvel*
                     </label>
-                    <select
-                      id="tipoImovel"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoImovel ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                      {...register('tipoImovel', { required: 'Tipo do imóvel é obrigatório' })}
-                    >
-                      <option value="" disabled>Selecione um tipo de imóvel</option>
-                      {opcoesDeTipoImovel.map((opcao) => (
-                        <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <CustomizableSelect
+                        id="tipoImovel"
+                        name="tipoImovel"
+                        value={watch('tipoImovel') || ''}
+                        onChange={(e) => {
+                          const event = { target: { name: 'tipoImovel', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                          register('tipoImovel', { required: 'Tipo do imóvel é obrigatório' }).onChange(event);
+                        }}
+                        options={opcoesTipoImovel}
+                        className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoImovel ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        placeholder="Selecione um tipo de imóvel"
+                        disabled={matriculaExistente || verificandoMatricula}
+                        required
+                        onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoImovel', deletedValue)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => abrirModalValorPersonalizado('TipoImovel')}
+                        className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                        disabled={matriculaExistente || verificandoMatricula || carregandoValoresPersonalizados}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                     {errors.tipoImovel && (
                       <p className="mt-1 text-xs text-danger-600">{errors.tipoImovel.message}</p>
                     )}
@@ -443,48 +753,93 @@ export default function CadastroImovel() {
                     <label htmlFor="tipoUsoEdificacao" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                       Tipo de Uso e Edificação*
                     </label>
-                    <select
-                      id="tipoUsoEdificacao"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoUsoEdificacao ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                      {...register('tipoUsoEdificacao', { required: 'Tipo de uso é obrigatório' })}
-                    >
-                      <option value="" disabled>Selecione um tipo de uso</option>
-                      {opcoesDeTipoUsoEdificacao.map((opcao) => (
-                        <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <CustomizableSelect
+                        id="tipoUsoEdificacao"
+                        name="tipoUsoEdificacao"
+                        value={watch('tipoUsoEdificacao') || ''}
+                        onChange={(e) => {
+                          const event = { target: { name: 'tipoUsoEdificacao', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                          register('tipoUsoEdificacao', { required: 'Tipo de uso é obrigatório' }).onChange(event);
+                        }}
+                        options={opcoesTipoUsoEdificacao}
+                        className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoUsoEdificacao ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        placeholder="Selecione um tipo de uso"
+                        disabled={matriculaExistente || verificandoMatricula}
+                        required
+                        onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoUsoEdificacao', deletedValue)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => abrirModalValorPersonalizado('TipoUsoEdificacao')}
+                        className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                        disabled={matriculaExistente || verificandoMatricula || carregandoValoresPersonalizados}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>
                     <label htmlFor="tipoPosse" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                       Tipo de Posse*
                     </label>
-                    <select
-                      id="tipoPosse"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoPosse ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                      {...register('tipoPosse', { required: 'Tipo de posse é obrigatório' })}
-                    >
-                      <option value="" disabled>Selecione um tipo de posse</option>
-                      {opcoesDeTipoPosse.map((opcao) => (
-                        <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <CustomizableSelect
+                        id="tipoPosse"
+                        name="tipoPosse"
+                        value={watch('tipoPosse') || ''}
+                        onChange={(e) => {
+                          const event = { target: { name: 'tipoPosse', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                          register('tipoPosse', { required: 'Tipo de posse é obrigatório' }).onChange(event);
+                        }}
+                        options={opcoesTipoPosse}
+                        className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoPosse ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        placeholder="Selecione um tipo de posse"
+                        disabled={matriculaExistente || verificandoMatricula}
+                        required
+                        onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoPosse', deletedValue)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => abrirModalValorPersonalizado('TipoPosse')}
+                        className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                        disabled={matriculaExistente || verificandoMatricula || carregandoValoresPersonalizados}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   
                   <div>
                     <label htmlFor="statusTransferencia" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                       Status de Transferência*
                     </label>
-                    <select
-                      id="statusTransferencia"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.statusTransferencia ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                      {...register('statusTransferencia', { required: 'Status de transferência é obrigatório' })}
-                    >
-                      <option value="" disabled>Selecione um status de transferência</option>
-                      {opcoesDeStatusTransferencia.map((opcao) => (
-                        <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <CustomizableSelect
+                        id="statusTransferencia"
+                        name="statusTransferencia"
+                        value={watch('statusTransferencia') || ''}
+                        onChange={(e) => {
+                          const event = { target: { name: 'statusTransferencia', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                          register('statusTransferencia', { required: 'Status de transferência é obrigatório' }).onChange(event);
+                        }}
+                        options={opcoesStatusTransferencia}
+                        className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.statusTransferencia ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        placeholder="Selecione um status de transferência"
+                        disabled={matriculaExistente || verificandoMatricula}
+                        required
+                        onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('StatusTransferencia', deletedValue)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => abrirModalValorPersonalizado('StatusTransferencia')}
+                        className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                        disabled={matriculaExistente || verificandoMatricula || carregandoValoresPersonalizados}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                     {errors.statusTransferencia && (
                       <p className="mt-1 text-xs text-danger-600">{errors.statusTransferencia.message}</p>
                     )}
@@ -506,7 +861,8 @@ export default function CadastroImovel() {
                     ) : (
                       <select
                         id="imovelPaiId"
-                        className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                        className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        disabled={matriculaExistente || verificandoMatricula}
                         {...register('imovelPaiId')}
                       >
                         <option value="">Nenhum (Este é um imóvel principal)</option>
@@ -529,7 +885,8 @@ export default function CadastroImovel() {
                     <input
                       type="text"
                       id="matriculasOriginadas"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                       {...register('matriculasOriginadas')}
                     />
                     <p className={`mt-1 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -550,7 +907,8 @@ export default function CadastroImovel() {
                     <input
                       type="text"
                       id="localizacao"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.localizacao ? 'border-danger-500 focus:ring-danger-500' : ''}`}
+                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.localizacao ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                       {...register('localizacao', { required: 'Localização é obrigatória' })}
                     />
                     {errors.localizacao && (
@@ -565,7 +923,8 @@ export default function CadastroImovel() {
                     <input
                       type="text"
                       id="pontoReferencia"
-                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                      className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                       {...register('pontoReferencia')}
                     />
                   </div>
@@ -579,7 +938,8 @@ export default function CadastroImovel() {
                         type="number"
                         step="any"
                         id="latitude"
-                        className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                        className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        disabled={matriculaExistente || verificandoMatricula}
                         {...register('latitude')}
                       />
                     </div>
@@ -592,7 +952,8 @@ export default function CadastroImovel() {
                         type="number"
                         step="any"
                         id="longitude"
-                        className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                        className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        disabled={matriculaExistente || verificandoMatricula}
                         {...register('longitude')}
                       />
                     </div>
@@ -697,7 +1058,8 @@ export default function CadastroImovel() {
                     <button
                       type="button"
                       onClick={() => setMostrarSeletorDocumento(true)}
-                      className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${darkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-700'}`}
+                      disabled={matriculaExistente || verificandoMatricula}
+                      className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${darkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-700'} ${matriculaExistente ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <Plus className="mr-2 h-4 w-4" />
                       Adicionar Documento
@@ -714,7 +1076,8 @@ export default function CadastroImovel() {
                     <input
                       type="checkbox"
                       {...register('infraestrutura.agua')}
-                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500`}
+                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500 ${matriculaExistente ? 'cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                     />
                     <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Água</span>
                   </label>
@@ -722,7 +1085,8 @@ export default function CadastroImovel() {
                     <input
                       type="checkbox"
                       {...register('infraestrutura.esgoto')}
-                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500`}
+                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500 ${matriculaExistente ? 'cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                     />
                     <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Esgoto</span>
                   </label>
@@ -730,7 +1094,8 @@ export default function CadastroImovel() {
                     <input
                       type="checkbox"
                       {...register('infraestrutura.energia')}
-                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500`}
+                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500 ${matriculaExistente ? 'cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                     />
                     <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Energia</span>
                   </label>
@@ -738,7 +1103,8 @@ export default function CadastroImovel() {
                     <input
                       type="checkbox"
                       {...register('infraestrutura.pavimentacao')}
-                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500`}
+                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500 ${matriculaExistente ? 'cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                     />
                     <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Pavimentação</span>
                   </label>
@@ -746,7 +1112,8 @@ export default function CadastroImovel() {
                     <input
                       type="checkbox"
                       {...register('infraestrutura.iluminacao')}
-                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500`}
+                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500 ${matriculaExistente ? 'cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                     />
                     <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Iluminação</span>
                   </label>
@@ -754,7 +1121,8 @@ export default function CadastroImovel() {
                     <input
                       type="checkbox"
                       {...register('infraestrutura.coletaLixo')}
-                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500`}
+                      className={`rounded ${darkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'} text-primary-600 focus:ring-primary-500 ${matriculaExistente ? 'cursor-not-allowed' : ''}`}
+                      disabled={matriculaExistente || verificandoMatricula}
                     />
                     <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Coleta de Lixo</span>
                   </label>
@@ -773,7 +1141,8 @@ export default function CadastroImovel() {
                   <input
                     type="text"
                     id="objeto"
-                    className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.objeto ? 'border-danger-500 focus:ring-danger-500' : ''}`}
+                    className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.objeto ? 'border-danger-500 focus:ring-danger-500' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={matriculaExistente || verificandoMatricula}
                     {...register('objeto', { required: 'Objeto é obrigatório' })}
                   />
                   {errors.objeto && (
@@ -788,7 +1157,8 @@ export default function CadastroImovel() {
                   <textarea
                     id="observacao"
                     rows={4}
-                    className={`input mt-1 w-full ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                    className={`input mt-1 w-full ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${matriculaExistente ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={matriculaExistente || verificandoMatricula}
                     {...register('observacao')}
                   />
                 </div>
@@ -825,13 +1195,18 @@ export default function CadastroImovel() {
           </Link>
           <button 
             type="submit" 
-            disabled={isSubmitting || cadastrando}
+            disabled={isSubmitting || cadastrando || matriculaExistente || verificandoMatricula}
             className={`btn ${darkMode ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'btn-primary'} ${cadastrando ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
             {cadastrando ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Salvando...
+              </>
+            ) : matriculaExistente ? (
+              <>
+                <AlertCircle className="mr-2 h-4 w-4" />
+                Matrícula já existe
               </>
             ) : (
               <>
@@ -842,6 +1217,18 @@ export default function CadastroImovel() {
           </button>
         </div>
       </form>
+
+      {/* Modal para adicionar valores personalizados */}
+      <CustomValueModal
+        isOpen={modalAberto}
+        onClose={() => setModalAberto(false)}
+        onSave={(valor) => {
+          adicionarNovoValor(categoriaAtual, valor);
+          setModalAberto(false);
+        }}
+        title={tituloModal}
+        darkMode={darkMode} // Usando o tema atual da aplicação
+      />
     </div>
   );
 }

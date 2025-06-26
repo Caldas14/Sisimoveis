@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Link, useNavigate } from 'react-router-dom';
+// Não precisamos mais de funções de mapeamento, usamos valores diretos
+import { toast } from '../components/Toast';
 import { 
   FileText, 
   ChevronRight, 
@@ -41,8 +43,8 @@ interface ImovelSecundario {
   Id: string;
   Matricula: string;
   Localizacao: string;
-  TipoImovelId: number;
-  FinalidadeId: number;
+  TipoImovel: string;
+  Finalidade: string;
   documentos: DocumentoVinculado[];
 }
 
@@ -51,8 +53,8 @@ interface ImovelPrincipal {
   Id: string;
   Matricula: string;
   Localizacao: string;
-  TipoImovelId: number;
-  FinalidadeId: number;
+  TipoImovel: string;
+  Finalidade: string;
   documentos: DocumentoVinculado[];
   imoveisSecundarios: ImovelSecundario[];
 }
@@ -139,7 +141,7 @@ export default function Documentos() {
       setErro(`Erro ao abrir arquivo: ${err.message}`);
       
       // Mostrar mensagem mais amigável para o usuário
-      alert(`Não foi possível abrir o arquivo. Verifique se o caminho existe e se você tem permissão para acessá-lo.\n\nCaminho: ${caminho}`);
+      toast.error(`Não foi possível abrir o arquivo. Verifique se o caminho existe e se você tem permissão para acessá-lo.\n\nCaminho: ${caminho}`, 8000);
     }
   };
   const [imoveisExpandidos, setImoveisExpandidos] = useState<{[key: string]: boolean}>({});
@@ -609,7 +611,7 @@ export default function Documentos() {
                         {imovelPrincipal.Matricula}
                       </h3>
                       <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {imovelPrincipal.Localizacao} - Tipo: {imovelPrincipal.TipoImovelId} (Finalidade: {imovelPrincipal.FinalidadeId})
+                        {imovelPrincipal.Localizacao} - Tipo: {imovelPrincipal.TipoImovel} (Finalidade: {imovelPrincipal.Finalidade})
                       </p>
                     </div>
                   </div>
@@ -710,7 +712,7 @@ export default function Documentos() {
                                       {imovelSecundario.Matricula}
                                     </h5>
                                     <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                      {imovelSecundario.Localizacao} - Tipo: {imovelSecundario.TipoImovelId} (Finalidade: {imovelSecundario.FinalidadeId})
+                                      {imovelSecundario.Localizacao} - Tipo: {imovelSecundario.TipoImovel} (Finalidade: {imovelSecundario.Finalidade})
                                     </p>
                                   </div>
                                 </div>

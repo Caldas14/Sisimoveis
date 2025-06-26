@@ -3,6 +3,7 @@ import { FileSpreadsheet } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Imovel } from '../types/imovel';
 import { saveAs } from 'file-saver';
+import { toast } from './Toast';
 import ExcelJS from 'exceljs';
 
 interface ExcelExporterTodosProps {
@@ -85,7 +86,7 @@ const ExcelExporterTodosExcelJS: React.FC<ExcelExporterTodosProps> = ({
       
     } catch (error) {
       console.error("Erro ao gerar Excel:", error);
-      alert("Ocorreu um erro ao gerar o arquivo Excel. Por favor, tente novamente.");
+      toast.error("Ocorreu um erro ao gerar o arquivo Excel. Por favor, tente novamente.");
     }
   };
 

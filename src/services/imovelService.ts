@@ -1,5 +1,14 @@
-import { Imovel, ImovelFormData } from '../types/imovel';
+import { 
+  Imovel, 
+  ImovelFormData, 
+  TipoImovel, 
+  Finalidade, 
+  StatusTransferencia, 
+  TipoPosse, 
+  TipoUsoEdificacao 
+} from '../types/imovel';
 import { getCurrentUser } from './usuarioService';
+// Não precisamos mais de funções de validação, trabalhamos com valores diretos
 
 // Dados vazios para fallback
 const dadosVazios: Imovel[] = [];
@@ -177,7 +186,7 @@ export async function cadastrarImovel(imovel: ImovelFormData): Promise<string> {
     
     // Verificar se o backend está disponível
     if (useEmptyData) {
-      throw new Error('Não foi possível cadastrar o imóvel - Backend não disponível');
+        throw new Error('Não foi possível cadastrar o imóvel - Backend não disponível');
     }
     
     // Verificar se é um erro de matrícula duplicada
@@ -189,62 +198,7 @@ export async function cadastrarImovel(imovel: ImovelFormData): Promise<string> {
   }
 }
 
-// Mapeamentos de IDs para valores de texto
-const tipoImovelMap: Record<number, string> = {
-  1: 'Residencial',
-  2: 'Comercial',
-  3: 'Industrial',
-  4: 'Rural',
-  5: 'Terreno',
-  6: 'Outros',
-  7: 'Casa',
-  8: 'Apartamento'
-};
-
-const statusTransferenciaMap: Record<number, string> = {
-  1: 'Não transferido',
-  2: 'Em processo',
-  3: 'Transferido',
-  4: 'Cancelado',
-  5: 'Disponível',
-  6: 'Em Transferência',
-  7: 'Não Aplicável',
-  8: 'Pendente',
-  9: 'Regularizado'
-};
-
-const finalidadeMap: Record<number, string> = {
-  1: 'Habitação',
-  2: 'Comércio',
-  3: 'Indústria',
-  4: 'Agricultura',
-  5: 'Serviços',
-  6: 'Misto',
-  7: 'Outros',
-  8: 'Residencial',
-  9: 'Comercial',
-  10: 'Industrial',
-  11: 'Rural'
-};
-
-const tipoPosseMap: Record<number, string> = {
-  1: 'Proprietário',
-  2: 'Locatário',
-  3: 'Comodato',
-  4: 'Outros',
-  6: 'Cedido'
-};
-
-const tipoUsoEdificacaoMap: Record<number, string> = {
-  1: 'Residencial Unifamiliar',
-  2: 'Residencial Multifamiliar',
-  3: 'Comercial',
-  4: 'Industrial',
-  5: 'Misto',
-  6: 'Terreno sem edificação',
-  7: 'Outros',
-  8: 'Residencial'
-};
+// Os mapeamentos foram movidos para src/utils/mapeamentos.ts
 
 // Função auxiliar para mapear os dados da API para o formato esperado pelo frontend
 function mapearImovelDaAPI(imovelAPI: any): Imovel {
@@ -323,12 +277,9 @@ function mapearImovelDaAPI(imovelAPI: any): Imovel {
     localizacao: imovelAPI.Localizacao || imovelAPI.localizacao || '',
     area: areaValue,
     objeto: imovelAPI.Objeto || imovelAPI.objeto || '',
-    tipoImovel: imovelAPI.TipoImovel || imovelAPI.tipoImovel || 
-              (imovelAPI.TipoImovelId ? tipoImovelMap[imovelAPI.TipoImovelId] || 'Outros' : 'Outros'),
-    finalidade: imovelAPI.Finalidade || imovelAPI.finalidade || 
-              (imovelAPI.FinalidadeId ? finalidadeMap[imovelAPI.FinalidadeId] || 'Outros' : 'Outros'),
-    statusTransferencia: imovelAPI.StatusTransferencia || imovelAPI.statusTransferencia || 
-                        (imovelAPI.StatusTransferenciaId ? statusTransferenciaMap[imovelAPI.StatusTransferenciaId] || 'Não transferido' : 'Não transferido'),
+    tipoImovel: (imovelAPI.TipoImovel || imovelAPI.tipoImovel || 'Outros') as TipoImovel,
+    finalidade: (imovelAPI.Finalidade || imovelAPI.finalidade || 'Outros') as Finalidade,
+    statusTransferencia: (imovelAPI.StatusTransferencia || imovelAPI.statusTransferencia || 'Não transferido') as StatusTransferencia,
     imovelPaiId: imovelAPI.ImovelPaiId || imovelAPI.imovelPaiId || null,
     dataCadastro: imovelAPI.DataCadastro || imovelAPI.dataCadastro || '',
     dataAtualizacao: imovelAPI.DataAtualizacao || imovelAPI.dataAtualizacao || '',
@@ -337,10 +288,8 @@ function mapearImovelDaAPI(imovelAPI: any): Imovel {
     latitude: imovelAPI.Latitude || imovelAPI.latitude || 0,
     longitude: imovelAPI.Longitude || imovelAPI.longitude || 0,
     pontoReferencia: imovelAPI.PontoReferencia || imovelAPI.pontoReferencia || '',
-    tipoPosse: imovelAPI.TipoPosse || imovelAPI.tipoPosse || 
-              (imovelAPI.TipoPosseId ? tipoPosseMap[imovelAPI.TipoPosseId] || 'Outros' : 'Outros'),
-    tipoUsoEdificacao: imovelAPI.TipoUsoEdificacao || imovelAPI.tipoUsoEdificacao || 
-                      (imovelAPI.TipoUsoEdificacaoId ? tipoUsoEdificacaoMap[imovelAPI.TipoUsoEdificacaoId] || 'Outros' : 'Outros'),
+    tipoPosse: (imovelAPI.TipoPosse || imovelAPI.tipoPosse || 'Outros') as TipoPosse,
+    tipoUsoEdificacao: (imovelAPI.TipoUsoEdificacao || imovelAPI.tipoUsoEdificacao || 'Outros') as TipoUsoEdificacao,
     observacao: imovelAPI.Observacao || imovelAPI.observacao || '',
     // Debug detalhado para o campo matriculasOriginadas
     matriculasOriginadas: (() => {
@@ -373,6 +322,31 @@ function mapearImovelDaAPI(imovelAPI: any): Imovel {
       'Não informado'
     )
   };
+}
+
+// Serviço para verificar se uma matrícula já existe
+export async function verificarMatriculaExistente(matricula: string): Promise<boolean> {
+  if (!matricula || matricula.trim() === '') {
+    return false;
+  }
+  
+  try {
+    // Verificar se o backend está disponível
+    const backendAvailable = await isBackendAvailable();
+    if (!backendAvailable) {
+      console.log('verificarMatriculaExistente: Backend não disponível');
+      return false;
+    }
+    
+    // Buscar imóveis com a matrícula específica
+    const imoveis = await buscarImoveis({ matricula });
+    
+    // Se encontrou algum imóvel com essa matrícula, ela já existe
+    return imoveis.length > 0;
+  } catch (err) {
+    console.error('verificarMatriculaExistente: Erro ao verificar matrícula:', err);
+    return false;
+  }
 }
 
 // Serviço para buscar imóveis com filtros

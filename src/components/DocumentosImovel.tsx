@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { toast } from './Toast';
 import { 
   FileText, 
   Upload, 
@@ -132,8 +133,8 @@ export default function DocumentosImovel({ imovelId, onDocumentosCarregados }: D
       console.error('Erro ao abrir arquivo:', err);
       setErro(`Erro ao abrir arquivo: ${err.message}`);
       
-      // Mostrar mensagem mais amigável para o usuário
-      alert(`Não foi possível abrir o arquivo. Verifique se o caminho existe e se você tem permissão para acessá-lo.\n\nCaminho: ${caminho}`);
+      // Mostrar mensagem mais amigável para o usuário com toast
+      toast.error(`Não foi possível abrir o arquivo. Verifique se o caminho existe e se você tem permissão para acessá-lo.\n\nCaminho: ${caminho}`, 8000);
     }
   };
   

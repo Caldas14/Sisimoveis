@@ -13,6 +13,7 @@ import gerenciadorDocumentosRoutes from './routes/gerenciador-documentos.js';
 import seletorArquivosRoutes from './routes/seletor-arquivos.js';
 import documentosRoutes from './routes/documentos.js';
 import abrirArquivoRoutes from './routes/abrir-arquivo.js';
+import valoresPersonalizadosRouter from './routes/valores-personalizados.js';
 
 // Configurar __dirname no ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -419,38 +420,22 @@ app.get('/api/imoveis', async (req, res) => {
         i.Matricula,
         i.Localizacao,
         i.Objeto,
-        i.TipoImovelId,
-        ISNULL(ti.Nome, 'Desconhecido') as TipoImovel,
-        i.FinalidadeId,
-        ISNULL(f.Nome, 'Desconhecido') as Finalidade,
-        i.StatusTransferenciaId,
-        ISNULL(st.Nome, 'Desconhecido') as StatusTransferencia,
+        i.TipoImovel,
+        i.Finalidade,
+        i.StatusTransferencia,
         i.ImovelPaiId,
         i.DataCadastro,
         i.DataAtualizacao,
-
         i.ValorVenal,
         i.RegistroIPTU,
         i.Latitude,
         i.Longitude,
         i.PontoReferencia,
-        i.TipoPosseId,
-        ISNULL(tp.Nome, 'Desconhecido') as TipoPosse,
-        i.TipoUsoEdificacaoId,
-        ISNULL(tue.Nome, 'Desconhecido') as TipoUsoEdificacao,
+        i.TipoPosse,
+        i.TipoUsoEdificacao,
         i.Observacao
       FROM 
         Imoveis i
-      LEFT JOIN 
-        TiposImovel ti ON i.TipoImovelId = ti.Id
-      LEFT JOIN 
-        Finalidades f ON i.FinalidadeId = f.Id
-      LEFT JOIN 
-        StatusTransferencia st ON i.StatusTransferenciaId = st.Id
-      LEFT JOIN 
-        TiposPosse tp ON i.TipoPosseId = tp.Id
-      LEFT JOIN 
-        TiposUsoEdificacao tue ON i.TipoUsoEdificacaoId = tue.Id
       LEFT JOIN
         InfraestruturaImoveis infra ON i.Id = infra.ImovelId
       WHERE 1=1
@@ -814,12 +799,9 @@ app.get('/api/imoveis/:id/secundarios', async (req, res) => {
         i.Localizacao,
         i.AreaM2 as Area,
         i.Objeto,
-        i.TipoImovelId,
-        ISNULL(ti.Nome, 'Desconhecido') as TipoImovel,
-        i.FinalidadeId,
-        ISNULL(f.Nome, 'Desconhecido') as Finalidade,
-        i.StatusTransferenciaId,
-        ISNULL(st.Nome, 'Desconhecido') as StatusTransferencia,
+        i.TipoImovel,
+        i.Finalidade,
+        i.StatusTransferencia,
         i.ImovelPaiId,
         i.DataCadastro,
         i.DataAtualizacao,    
@@ -829,23 +811,12 @@ app.get('/api/imoveis/:id/secundarios', async (req, res) => {
         i.Latitude,
         i.Longitude,
         i.PontoReferencia,
-        i.TipoPosseId,
-        ISNULL(tp.Nome, 'Desconhecido') as TipoPosse,
-        i.TipoUsoEdificacaoId,
-        ISNULL(tue.Nome, 'Desconhecido') as TipoUsoEdificacao,
+        i.TipoPosse,
+        i.TipoUsoEdificacao,
         i.Observacao
       FROM 
         Imoveis i
-      LEFT JOIN 
-        TiposImovel ti ON i.TipoImovelId = ti.Id
-      LEFT JOIN 
-        Finalidades f ON i.FinalidadeId = f.Id
-      LEFT JOIN 
-        StatusTransferencia st ON i.StatusTransferenciaId = st.Id
-      LEFT JOIN 
-        TiposPosse tp ON i.TipoPosseId = tp.Id
-      LEFT JOIN 
-        TiposUsoEdificacao tue ON i.TipoUsoEdificacaoId = tue.Id
+
       WHERE 
         i.ImovelPaiId = '${req.params.id}'
       ORDER BY 
@@ -916,114 +887,15 @@ app.post('/api/imoveis', async (req, res) => {
     await poolConnect; // Aguardar a conexão ser estabelecida
     const imovel = req.body;
     
-    // Obter IDs das tabelas de referência
-    let tipoImovelId, finalidadeId, statusTransferenciaId, tipoPosseId, tipoUsoEdificacaoId;
+    // Log dos valores de texto que serão usados diretamente
+    console.log('Valores que serão usados diretamente no cadastro:');
+    console.log('- TipoImovel:', imovel.tipoImovel || 'Outros');
+    console.log('- Finalidade:', imovel.finalidade || 'Outros');
+    console.log('- StatusTransferencia:', imovel.statusTransferencia || 'Não transferido');
+    console.log('- TipoPosse:', imovel.tipoPosse || 'Outros');
+    console.log('- TipoUsoEdificacao:', imovel.tipoUsoEdificacao || 'Outros');
     
-    // Buscar ID do tipo de imóvel
-    if (imovel.tipoImovel) {
-      const tipoImovelResult = await pool.request().query(`
-        SELECT Id FROM TiposImovel WHERE Nome = '${imovel.tipoImovel}'
-      `);
-      tipoImovelId = tipoImovelResult.recordset.length > 0 ? tipoImovelResult.recordset[0].Id : null;
-    }
-    
-    // Buscar ID da finalidade
-    if (imovel.finalidade) {
-      const finalidadeResult = await pool.request().query(`
-        SELECT Id FROM Finalidades WHERE Nome = '${imovel.finalidade}'
-      `);
-      finalidadeId = finalidadeResult.recordset.length > 0 ? finalidadeResult.recordset[0].Id : null;
-    }
-    
-    // Buscar ID do status de transferência
-    if (imovel.statusTransferencia) {
-      const statusResult = await pool.request().query(`
-        SELECT Id FROM StatusTransferencia WHERE Nome = '${imovel.statusTransferencia}'
-      `);
-      statusTransferenciaId = statusResult.recordset.length > 0 ? statusResult.recordset[0].Id : null;
-    }
-    
-    // Se não encontrou o status de transferência, buscar um valor padrão
-    if (!statusTransferenciaId) {
-      console.log(`Aviso: Status de transferência '${imovel.statusTransferencia}' não encontrado. Usando valor padrão.`);
-      const defaultStatusResult = await pool.request().query(`
-        SELECT TOP 1 Id FROM StatusTransferencia ORDER BY Id
-      `);
-      
-      if (defaultStatusResult.recordset.length > 0) {
-        statusTransferenciaId = defaultStatusResult.recordset[0].Id;
-        console.log(`Usando status de transferência padrão com ID: ${statusTransferenciaId}`);
-      } else {
-        // Se não houver nenhum status de transferência cadastrado, criar um padrão
-        console.log('Nenhum status de transferência encontrado. Criando um padrão.');
-        const defaultStatusId = generateUUID();
-        await pool.request().query(`
-          INSERT INTO StatusTransferencia (Id, Nome)
-          VALUES ('${defaultStatusId}', 'Pendente')
-        `);
-        statusTransferenciaId = defaultStatusId;
-      }
-    }
-    
-    // Buscar ID do tipo de posse
-    if (imovel.tipoPosse) {
-      const tipoPosseResult = await pool.request().query(`
-        SELECT Id FROM TiposPosse WHERE Nome = '${imovel.tipoPosse}'
-      `);
-      tipoPosseId = tipoPosseResult.recordset.length > 0 ? tipoPosseResult.recordset[0].Id : null;
-      
-      // Se não encontrou o tipo de posse, buscar um valor padrão
-      if (!tipoPosseId) {
-        console.log(`Aviso: Tipo de posse '${imovel.tipoPosse}' não encontrado. Usando valor padrão.`);
-        const defaultPosseResult = await pool.request().query(`
-          SELECT TOP 1 Id FROM TiposPosse ORDER BY Id
-        `);
-        
-        if (defaultPosseResult.recordset.length > 0) {
-          tipoPosseId = defaultPosseResult.recordset[0].Id;
-          console.log(`Usando tipo de posse padrão com ID: ${tipoPosseId}`);
-        } else {
-          // Se não houver nenhum tipo de posse cadastrado, criar um padrão
-          console.log('Nenhum tipo de posse encontrado. Criando um padrão.');
-          const defaultPosseId = generateUUID();
-          await pool.request().query(`
-            INSERT INTO TiposPosse (Id, Nome)
-            VALUES ('${defaultPosseId}', 'Próprio')
-          `);
-          tipoPosseId = defaultPosseId;
-        }
-      }
-    }
-    
-    // Buscar ID do tipo de uso de edificação
-    if (imovel.tipoUsoEdificacao) {
-      const tipoUsoResult = await pool.request().query(`
-        SELECT Id FROM TiposUsoEdificacao WHERE Nome = '${imovel.tipoUsoEdificacao}'
-      `);
-      tipoUsoEdificacaoId = tipoUsoResult.recordset.length > 0 ? tipoUsoResult.recordset[0].Id : null;
-      
-      // Se não encontrou o tipo de uso, buscar um valor padrão
-      if (!tipoUsoEdificacaoId) {
-        console.log(`Aviso: Tipo de uso de edificação '${imovel.tipoUsoEdificacao}' não encontrado. Usando valor padrão.`);
-        const defaultUsoResult = await pool.request().query(`
-          SELECT TOP 1 Id FROM TiposUsoEdificacao ORDER BY Id
-        `);
-        
-        if (defaultUsoResult.recordset.length > 0) {
-          tipoUsoEdificacaoId = defaultUsoResult.recordset[0].Id;
-          console.log(`Usando tipo de uso de edificação padrão com ID: ${tipoUsoEdificacaoId}`);
-        } else {
-          // Se não houver nenhum tipo de uso cadastrado, criar um padrão
-          console.log('Nenhum tipo de uso de edificação encontrado. Criando um padrão.');
-          const defaultUsoId = generateUUID();
-          await pool.request().query(`
-            INSERT INTO TiposUsoEdificacao (Id, Nome)
-            VALUES ('${defaultUsoId}', 'Residencial')
-          `);
-          tipoUsoEdificacaoId = defaultUsoId;
-        }
-      }
-    }
+    // Note: IDs de referência não são mais usados, valores de texto são usados diretamente
     
     // Obter informações do usuário que está cadastrando o imóvel
     let usuarioId = '00000000-0000-0000-0000-000000000000';
@@ -1088,19 +960,19 @@ app.post('/api/imoveis', async (req, res) => {
     console.log('- Localização:', localizacao);
     console.log('- Área:', area);
     console.log('- Objeto:', objeto);
-    console.log('- Tipo Imóvel ID:', tipoImovelId);
-    console.log('- Finalidade ID:', finalidadeId);
-    console.log('- Status Transferência ID:', statusTransferenciaId);
+    console.log('- Tipo Imóvel:', imovel.tipoImovel || 'Outros');
+    console.log('- Finalidade:', imovel.finalidade || 'Outros');
+    console.log('- Status Transferência:', imovel.statusTransferencia || 'Não transferido');
     console.log('- Imóvel Pai ID:', imovel.imovelPaiId || 'NULL');
     console.log('- Infraestrutura:', JSON.stringify(imovel.infraestrutura));
     
     // Construir a query de inserção
     const insertQuery = `
       INSERT INTO Imoveis (
-        Id, Matricula, Localizacao, AreaM2, Objeto, TipoImovelId, FinalidadeId, 
-        StatusTransferenciaId, ImovelPaiId, DataCadastro, DataAtualizacao,
+        Id, Matricula, Localizacao, AreaM2, Objeto, TipoImovel, Finalidade, 
+        StatusTransferencia, ImovelPaiId, DataCadastro, DataAtualizacao,
         ValorVenal, RegistroIPTU, Latitude, Longitude, PontoReferencia, 
-        TipoPosseId, TipoUsoEdificacaoId, Observacao, MatriculasOriginadas,
+        TipoPosse, TipoUsoEdificacao, Observacao, MatriculasOriginadas,
         UsuarioCadastroId, UsuarioCadastroNome, UsuarioAtualizacaoId
       )
       VALUES (
@@ -1109,9 +981,9 @@ app.post('/api/imoveis', async (req, res) => {
         '${localizacao}', 
         '${area}', 
         '${objeto}', 
-        ${tipoImovelId || 'NULL'}, 
-        ${finalidadeId || 'NULL'}, 
-        ${statusTransferenciaId}, 
+        '${imovel.tipoImovel || "Outros"}', 
+        '${imovel.finalidade || "Outros"}', 
+        '${imovel.statusTransferencia || "Não transferido"}', 
         ${imovel.imovelPaiId ? `'${imovel.imovelPaiId}'` : 'NULL'}, 
         GETDATE(), 
         GETDATE(),
@@ -1120,8 +992,8 @@ app.post('/api/imoveis', async (req, res) => {
         ${latitude}, 
         ${longitude}, 
         '${pontoReferencia}', 
-        ${tipoPosseId}, 
-        ${tipoUsoEdificacaoId}, 
+        '${imovel.tipoPosse || "Outros"}', 
+        '${imovel.tipoUsoEdificacao || "Outros"}', 
         '${observacao}',
         '${matriculasOriginadas}',
         '${usuarioId}', 
@@ -1299,7 +1171,7 @@ app.delete('/api/imoveis/:id', async (req, res) => {
         console.log('Tabelas relacionadas encontradas para secundários:', relatedTables.map(t => t.TableName));
         
         // Verificar tabelas específicas conhecidas (para compatibilidade)
-        const knownTables = ['Infraestrutura', 'InfraestruturaImoveis', 'Documentos', 'DocumentosImoveis'];
+        const knownTables = ['Infraestrutura', 'InfraestruturaImoveis', 'Documentos'];
         const tablesCheckResult = await pool.request().query(`
           SELECT TABLE_NAME 
           FROM INFORMATION_SCHEMA.TABLES 
@@ -1374,7 +1246,7 @@ app.delete('/api/imoveis/:id', async (req, res) => {
       }
       
       // Verificar tabelas específicas conhecidas (para compatibilidade)
-      const knownTables = ['Infraestrutura', 'InfraestruturaImoveis', 'Documentos', 'DocumentosImoveis'];
+      const knownTables = ['Infraestrutura', 'InfraestruturaImoveis', 'Documentos'];
       const tablesCheckResult = await pool.request().query(`
         SELECT TABLE_NAME 
         FROM INFORMATION_SCHEMA.TABLES 
@@ -1469,53 +1341,12 @@ app.put('/api/imoveis/:id', async (req, res) => {
       matriculasOriginadas = imovel.matriculasOriginadas;
     }
     
-    // Obter IDs das tabelas de referência
-    let tipoImovelId = null, finalidadeId = null, statusTransferenciaId = null, tipoPosseId = null, tipoUsoEdificacaoId = null;
-    
-    // Buscar ID do tipo de imóvel
-    if (imovel.tipoImovel) {
-      const tipoImovelResult = await pool.request().query(`
-        SELECT Id FROM TiposImovel WHERE Nome = '${imovel.tipoImovel}'
-      `);
-      tipoImovelId = tipoImovelResult.recordset.length > 0 ? parseInt(tipoImovelResult.recordset[0].Id) : null;
-      console.log('TipoImovelId encontrado:', tipoImovelId, 'para nome:', imovel.tipoImovel);
-    }
-    
-    // Buscar ID da finalidade
-    if (imovel.finalidade) {
-      const finalidadeResult = await pool.request().query(`
-        SELECT Id FROM Finalidades WHERE Nome = '${imovel.finalidade}'
-      `);
-      finalidadeId = finalidadeResult.recordset.length > 0 ? parseInt(finalidadeResult.recordset[0].Id) : null;
-      console.log('FinalidadeId encontrado:', finalidadeId, 'para nome:', imovel.finalidade);
-    }
-    
-    // Buscar ID do status de transferência
-    if (imovel.statusTransferencia) {
-      const statusResult = await pool.request().query(`
-        SELECT Id FROM StatusTransferencia WHERE Nome = '${imovel.statusTransferencia}'
-      `);
-      statusTransferenciaId = statusResult.recordset.length > 0 ? parseInt(statusResult.recordset[0].Id) : null;
-      console.log('StatusTransferenciaId encontrado:', statusTransferenciaId, 'para nome:', imovel.statusTransferencia);
-    }
-    
-    // Buscar ID do tipo de posse
-    if (imovel.tipoPosse) {
-      const tipoPosseResult = await pool.request().query(`
-        SELECT Id FROM TiposPosse WHERE Nome = '${imovel.tipoPosse}'
-      `);
-      tipoPosseId = tipoPosseResult.recordset.length > 0 ? parseInt(tipoPosseResult.recordset[0].Id) : null;
-      console.log('TipoPosseId encontrado:', tipoPosseId, 'para nome:', imovel.tipoPosse);
-    }
-    
-    // Buscar ID do tipo de uso de edificação
-    if (imovel.tipoUsoEdificacao) {
-      const tipoUsoResult = await pool.request().query(`
-        SELECT Id FROM TiposUsoEdificacao WHERE Nome = '${imovel.tipoUsoEdificacao}'
-      `);
-      tipoUsoEdificacaoId = tipoUsoResult.recordset.length > 0 ? parseInt(tipoUsoResult.recordset[0].Id) : null;
-      console.log('TipoUsoEdificacaoId encontrado:', tipoUsoEdificacaoId, 'para nome:', imovel.tipoUsoEdificacao);
-    }
+    // Log dos valores que serão usados diretamente
+    console.log('TipoImovel:', imovel.tipoImovel || 'Outros');
+    console.log('Finalidade:', imovel.finalidade || 'Outros');
+    console.log('StatusTransferencia:', imovel.statusTransferencia || 'Não transferido');
+    console.log('TipoPosse:', imovel.tipoPosse || 'Outros');
+    console.log('TipoUsoEdificacao:', imovel.tipoUsoEdificacao || 'Outros');
 
     // Atualizar o imóvel na tabela principal
     await pool.request()
@@ -1525,17 +1356,17 @@ app.put('/api/imoveis/:id', async (req, res) => {
       .input('areaM2', sql.Decimal(18, 2), area)
       .input('objeto', sql.VarChar, imovel.objeto || '')
       .input('observacao', sql.VarChar, imovel.observacao || '')
-      .input('finalidadeId', sql.Int, finalidadeId)
-      .input('tipoImovelId', sql.Int, tipoImovelId)
-      .input('statusTransferenciaId', sql.Int, statusTransferenciaId)
+      .input('finalidade', sql.VarChar, imovel.finalidade || 'Outros')
+      .input('tipoImovel', sql.VarChar, imovel.tipoImovel || 'Outros')
+      .input('statusTransferencia', sql.VarChar, imovel.statusTransferencia || 'Não transferido')
       .input('imovelPaiId', sql.UniqueIdentifier, imovel.imovelPaiId || null)
       .input('matriculasOriginadas', sql.VarChar, matriculasOriginadas)
       .input('registroIPTU', sql.VarChar, imovel.registroIPTU || '')
       .input('valorVenal', sql.Decimal(18, 2), valorVenal)
       .input('latitude', sql.Decimal(18, 6), latitude)
       .input('longitude', sql.Decimal(18, 6), longitude)
-      .input('tipoUsoEdificacaoId', sql.Int, tipoUsoEdificacaoId)
-      .input('tipoPosseId', sql.Int, tipoPosseId)
+      .input('tipoUsoEdificacao', sql.VarChar, imovel.tipoUsoEdificacao || 'Outros')
+      .input('tipoPosse', sql.VarChar, imovel.tipoPosse || 'Outros')
       .input('pontoReferencia', sql.VarChar, imovel.pontoReferencia || '')
       .query(`
         UPDATE Imoveis SET
@@ -1544,17 +1375,17 @@ app.put('/api/imoveis/:id', async (req, res) => {
           AreaM2 = @areaM2,
           Objeto = @objeto,
           Observacao = @observacao,
-          FinalidadeId = @finalidadeId,
-          TipoImovelId = @tipoImovelId,
-          StatusTransferenciaId = @statusTransferenciaId,
+          Finalidade = @finalidade,
+          TipoImovel = @tipoImovel,
+          StatusTransferencia = @statusTransferencia,
           ImovelPaiId = @imovelPaiId,
           MatriculasOriginadas = @matriculasOriginadas,
           RegistroIPTU = @registroIPTU,
           ValorVenal = @valorVenal,
           Latitude = @latitude,
           Longitude = @longitude,
-          TipoUsoEdificacaoId = @tipoUsoEdificacaoId,
-          TipoPosseId = @tipoPosseId,
+          TipoUsoEdificacao = @tipoUsoEdificacao,
+          TipoPosse = @tipoPosse,
           PontoReferencia = @pontoReferencia,
           DataAtualizacao = GETDATE()
         WHERE Id = @id
@@ -1686,7 +1517,10 @@ app.put('/api/imoveis/:id', async (req, res) => {
 app.use('/api/usuarios', usuariosRoutes(pool, poolConnect));
 
 // Configurar rotas de gerenciamento de documentos
-app.use('/api/documentos', gerenciadorDocumentosRoutes(pool, poolConnect));
+app.use('/api/gerenciador-documentos', gerenciadorDocumentosRoutes(pool, poolConnect));
+
+// Configurar rotas de valores personalizados
+app.use('/api/valores-personalizados', valoresPersonalizadosRouter(pool, poolConnect));
 
 // Configurar rotas de seleção de arquivos
 app.use('/api/seletor-arquivos', seletorArquivosRoutes);

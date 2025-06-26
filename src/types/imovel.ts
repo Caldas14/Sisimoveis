@@ -4,13 +4,20 @@ export type TipoImovel =
   | 'Industrial'
   | 'Rural'
   | 'Terreno'
-  | 'Outros';
+  | 'Outros'
+  | 'Casa'
+  | 'Apartamento';
 
 export type StatusTransferencia = 
   | 'Não transferido'
   | 'Em processo'
   | 'Transferido'
-  | 'Cancelado';
+  | 'Cancelado'
+  | 'Disponível'
+  | 'Em Transferência'
+  | 'Não Aplicável'
+  | 'Pendente'
+  | 'Regularizado';
 
 export type Finalidade =
   | 'Habitação'
@@ -19,19 +26,25 @@ export type Finalidade =
   | 'Agricultura'
   | 'Serviços'
   | 'Misto'
-  | 'Outros';
+  | 'Outros'
+  | 'Residencial'
+  | 'Comercial'
+  | 'Industrial'
+  | 'Rural';
 
 export type TipoPosse =
   | 'Proprietário'
   | 'Locatário'
   | 'Comodato'
-  | 'Outros';
+  | 'Outros'
+  | 'Cedido';
 
 export type TipoUsoEdificacao =
   | 'Residencial Unifamiliar'
   | 'Residencial Multifamiliar'
   | 'Comercial'
   | 'Industrial'
+  | 'Institucional'
   | 'Misto'
   | 'Terreno sem edificação'
   | 'Outros';

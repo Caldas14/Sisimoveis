@@ -173,6 +173,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Acesse:`);
   console.log(`- Local: http://localhost:${PORT}`);
-  console.log(`- Rede: http://25.0.62.72:${PORT}`);
+  console.log(`- Rede: http://192.168.1.3:${PORT}`);
   console.log(`As chamadas de API serão redirecionadas para http://${BACKEND_HOST}:${BACKEND_PORT}`);
 });

@@ -13,12 +13,14 @@ import DatabaseProtectedRoute from './components/DatabaseProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DatabaseStatusProvider } from './components/DatabaseStatus';
+import { ToastContainer } from './components/Toast';
 
 function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
         <DatabaseStatusProvider>
+          <ToastContainer />
           <Routes>
             {/* Rota pública para login */}
             <Route path="/login" element={<Login />} />

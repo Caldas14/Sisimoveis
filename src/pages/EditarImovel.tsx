@@ -3,65 +3,72 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useDatabaseStatus } from '../components/DatabaseStatus';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, Save, X, Loader2 } from 'lucide-react';
+import CustomizableSelect from '../components/CustomizableSelect';
+import { ChevronRight, Save, X, Plus } from 'lucide-react';
+import * as valoresPersonalizadosService from '../services/valoresPersonalizadosService';
+import { OpcaoSelect, ValorPersonalizado } from '../services/valoresPersonalizadosService';
+import { excluirValorPersonalizado } from '../services/valoresPersonalizadosService';
+import CustomValueModal from '../components/CustomValueModal';
+// Nota: Se react-toastify não estiver instalado, use o sistema de notificação existente
+// import { toast } from 'react-toastify';
 import { 
-  ImovelFormData, Finalidade, TipoImovel, StatusTransferencia 
+  ImovelFormData
 } from '../types/imovel';
 // Opções para os selects com valores exatos do banco de dados
 const opcoesDeFinaldiade = [
-  { value: 'Habitação', label: 'Habitação' },
-  { value: 'Comércio', label: 'Comércio' },
-  { value: 'Indústria', label: 'Indústria' },
   { value: 'Agricultura', label: 'Agricultura' },
-  { value: 'Serviços', label: 'Serviços' },
-  { value: 'Misto', label: 'Misto' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Residencial', label: 'Residencial' },
   { value: 'Comercial', label: 'Comercial' },
+  { value: 'Comércio', label: 'Comércio' },
+  { value: 'Habitação', label: 'Habitação' },
   { value: 'Industrial', label: 'Industrial' },
-  { value: 'Rural', label: 'Rural' }
+  { value: 'Indústria', label: 'Indústria' },
+  { value: 'Misto', label: 'Misto' },
+  { value: 'Residencial', label: 'Residencial' },
+  { value: 'Rural', label: 'Rural' },
+  { value: 'Serviços', label: 'Serviços' },
+  { value: 'Outros', label: 'Outros' }
 ];
 
 const opcoesDeTipoImovel = [
-  { value: 'Residencial', label: 'Residencial' },
+  { value: 'Apartamento', label: 'Apartamento' },
+  { value: 'Casa', label: 'Casa' },
   { value: 'Comercial', label: 'Comercial' },
   { value: 'Industrial', label: 'Industrial' },
+  { value: 'Residencial', label: 'Residencial' },
   { value: 'Rural', label: 'Rural' },
   { value: 'Terreno', label: 'Terreno' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Casa', label: 'Casa' },
-  { value: 'Apartamento', label: 'Apartamento' }
+  { value: 'Outros', label: 'Outros' }
 ];
 
 const opcoesDeStatusTransferencia = [
-  { value: 'Não transferido', label: 'Não transferido' },
-  { value: 'Em processo', label: 'Em processo' },
-  { value: 'Transferido', label: 'Transferido' },
   { value: 'Cancelado', label: 'Cancelado' },
   { value: 'Disponível', label: 'Disponível' },
+  { value: 'Em processo', label: 'Em processo' },
   { value: 'Em Transferência', label: 'Em Transferência' },
   { value: 'Não Aplicável', label: 'Não Aplicável' },
+  { value: 'Não transferido', label: 'Não transferido' },
   { value: 'Pendente', label: 'Pendente' },
-  { value: 'Regularizado', label: 'Regularizado' }
+  { value: 'Regularizado', label: 'Regularizado' },
+  { value: 'Transferido', label: 'Transferido' }
 ];
 
 const opcoesDeTipoPosse = [
-  { value: 'Proprietário', label: 'Proprietário' },
-  { value: 'Locatário', label: 'Locatário (Alugado)' },
+  { value: 'Cedido', label: 'Cedido' },
   { value: 'Comodato', label: 'Comodato' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Cedido', label: 'Cedido' }
+  { value: 'Locatário', label: 'Locatário (Alugado)' },
+  { value: 'Proprietário', label: 'Proprietário' },
+  { value: 'Outros', label: 'Outros' }
 ];
 
 const opcoesDeTipoUsoEdificacao = [
-  { value: 'Residencial Unifamiliar', label: 'Residencial Unifamiliar' },
-  { value: 'Residencial Multifamiliar', label: 'Residencial Multifamiliar' },
   { value: 'Comercial', label: 'Comercial' },
   { value: 'Industrial', label: 'Industrial' },
   { value: 'Misto', label: 'Misto' },
+  { value: 'Residencial', label: 'Residencial' },
+  { value: 'Residencial Multifamiliar', label: 'Residencial Multifamiliar' },
+  { value: 'Residencial Unifamiliar', label: 'Residencial Unifamiliar' },
   { value: 'Terreno sem edificação', label: 'Terreno sem edificação' },
-  { value: 'Outros', label: 'Outros' },
-  { value: 'Residencial', label: 'Residencial' }
+  { value: 'Outros', label: 'Outros' }
 ];
 
 import { obterImovelPorId, listarImoveisPrincipais, atualizarImovel } from '../services/imovelService';
@@ -71,14 +78,294 @@ export default function EditarImovel() {
   const { isConnected } = useDatabaseStatus();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const [imovel, setImovel] = useState(null);
-  const [imoveisPrincipais, setImoveisPrincipais] = useState([]);
+  const [imovel, setImovel] = useState<any>(null);
+  const [imoveisPrincipais, setImoveisPrincipais] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [mensagemSucesso, setMensagemSucesso] = useState(null);
+  const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
   
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<ImovelFormData>();
+  // Estados para os valores personalizados
+  const [valoresPersonalizadosFinalidade, setValoresPersonalizadosFinalidade] = useState<ValorPersonalizado[]>([]);
+  const [valoresPersonalizadosTipoImovel, setValoresPersonalizadosTipoImovel] = useState<ValorPersonalizado[]>([]);
+  const [valoresPersonalizadosTipoUsoEdificacao, setValoresPersonalizadosTipoUsoEdificacao] = useState<ValorPersonalizado[]>([]);
+  const [valoresPersonalizadosTipoPosse, setValoresPersonalizadosTipoPosse] = useState<ValorPersonalizado[]>([]);
+  const [valoresPersonalizadosStatusTransferencia, setValoresPersonalizadosStatusTransferencia] = useState<ValorPersonalizado[]>([]);
+  
+  // Estados para controlar os modais de valores personalizados
+  const [modalAberto, setModalAberto] = useState<string | null>(null);
+  const [tituloModal, setTituloModal] = useState<string>('');
+  const [carregandoValoresPersonalizados, setCarregandoValoresPersonalizados] = useState<boolean>(false);
+  
+  // Estados para as opções combinadas (padrão + personalizadas)
+  const [opcoesFinaldiade, setOpcoesFinaldiade] = useState<OpcaoSelect[]>(opcoesDeFinaldiade);
+  const [opcoesTipoImovel, setOpcoesTipoImovel] = useState<OpcaoSelect[]>(opcoesDeTipoImovel);
+  const [opcoesTipoUsoEdificacao, setOpcoesTipoUsoEdificacao] = useState<OpcaoSelect[]>(opcoesDeTipoUsoEdificacao);
+  const [opcoesTipoPosse, setOpcoesTipoPosse] = useState<OpcaoSelect[]>(opcoesDeTipoPosse);
+  const [opcoesStatusTransferencia, setOpcoesStatusTransferencia] = useState<OpcaoSelect[]>(opcoesDeStatusTransferencia);
+  
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue } = useForm<ImovelFormData>();
+  
+  // Função para excluir um valor personalizado
+  const handleDeleteCustomValue = async (categoria: string, valorToDelete: string) => {
+    try {
+      console.log(`Excluindo valor personalizado: ${valorToDelete} da categoria ${categoria}`);
+      
+      // Buscar os valores personalizados para encontrar o ID do valor a ser excluído
+      const valoresPersonalizados = await valoresPersonalizadosService.buscarValoresPersonalizados(categoria);
+      const valorToExclude = valoresPersonalizados.find(v => 
+        (v.Valor || v.valor) === valorToDelete
+      );
+      
+      if (!valorToExclude) {
+        console.error(`Valor personalizado ${valorToDelete} não encontrado`);
+        return;
+      }
+      
+      const valorId = valorToExclude.Id || valorToExclude.id;
+      
+      if (!valorId) {
+        console.error('ID do valor personalizado não encontrado');
+        return;
+      }
+      
+      // Excluir o valor personalizado
+      await excluirValorPersonalizado(valorId);
+      
+      // Atualizar a lista de valores personalizados
+      switch (categoria) {
+        case 'Finalidade':
+          setOpcoesFinaldiade(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'TipoImovel':
+          setOpcoesTipoImovel(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'TipoUsoEdificacao':
+          setOpcoesTipoUsoEdificacao(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'TipoPosse':
+          setOpcoesTipoPosse(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+        case 'StatusTransferencia':
+          setOpcoesStatusTransferencia(prev => prev.filter(option => option.value !== valorToDelete));
+          break;
+      }
+      
+      console.log(`Valor personalizado ${valorToDelete} excluído com sucesso`);
+      // Mostrar mensagem de sucesso temporária
+      setMensagemSucesso('Valor personalizado excluído com sucesso!');
+      setTimeout(() => setMensagemSucesso(''), 3000);
+    } catch (error) {
+      console.error('Erro ao excluir valor personalizado:', error);
+      // Mostrar mensagem de erro temporária
+      setError('Erro ao excluir valor personalizado. Tente novamente.');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+  
+  // Função para abrir o modal de valor personalizado
+  const abrirModalValorPersonalizado = (categoria: string) => {
+    let titulo = '';
+    switch (categoria) {
+      case 'Finalidade':
+        titulo = 'Nova Finalidade';
+        break;
+      case 'TipoImovel':
+        titulo = 'Novo Tipo de Imóvel';
+        break;
+      case 'TipoUsoEdificacao':
+        titulo = 'Novo Tipo de Uso da Edificação';
+        break;
+      case 'TipoPosse':
+        titulo = 'Novo Tipo de Posse';
+        break;
+      case 'StatusTransferencia':
+        titulo = 'Novo Status de Transferência';
+        break;
+      default:
+        titulo = 'Novo Valor Personalizado';
+    }
+    setTituloModal(titulo);
+    setModalAberto(categoria);
+  };
+  
+  // Função para adicionar um novo valor personalizado
+  const adicionarNovoValor = async (categoria: string, valor: string) => {
+    if (!valor.trim()) return;
+    try {
+      setCarregandoValoresPersonalizados(true);
+      await valoresPersonalizadosService.adicionarValorPersonalizado(categoria, valor.trim());
+      
+      // Atualizar a lista de valores personalizados
+      const valoresAtualizados = await valoresPersonalizadosService.buscarValoresPersonalizados(categoria);
+      
+      // Encontrar o valor recém-adicionado nos valores atualizados
+      const novoValorAdicionado = valoresAtualizados.find(v => 
+        (v.valor || v.Valor) === valor.trim()
+      );
+      
+      if (novoValorAdicionado) {
+        const valorId = novoValorAdicionado.id || novoValorAdicionado.Id;
+        const valorLabel = novoValorAdicionado.valor || novoValorAdicionado.Valor;
+        
+        switch (categoria) {
+          case 'Finalidade':
+            setValoresPersonalizadosFinalidade(valoresAtualizados);
+            setOpcoesFinaldiade([
+              ...opcoesDeFinaldiade,
+              ...valoresAtualizados.map(v => ({
+                value: (v.id || v.Id) as string,
+                label: (v.valor || v.Valor) as string,
+                personalizado: true
+              }))
+            ]);
+            // Selecionar automaticamente o novo valor adicionado
+            setTimeout(() => {
+              setValue('finalidade', valorId as any);
+            }, 100);
+            break;
+          case 'TipoImovel':
+            setValoresPersonalizadosTipoImovel(valoresAtualizados);
+            setOpcoesTipoImovel([
+              ...opcoesDeTipoImovel,
+              ...valoresAtualizados.map(v => ({
+                value: (v.id || v.Id) as string,
+                label: (v.valor || v.Valor) as string,
+                personalizado: true
+              }))
+            ]);
+            // Selecionar automaticamente o novo valor adicionado
+            setTimeout(() => {
+              setValue('tipoImovel', valorId as any);
+            }, 100);
+            break;
+          case 'TipoUsoEdificacao':
+            setValoresPersonalizadosTipoUsoEdificacao(valoresAtualizados);
+            setOpcoesTipoUsoEdificacao([
+              ...opcoesDeTipoUsoEdificacao,
+              ...valoresAtualizados.map(v => ({
+                value: (v.id || v.Id) as string,
+                label: (v.valor || v.Valor) as string,
+                personalizado: true
+              }))
+            ]);
+            // Selecionar automaticamente o novo valor adicionado
+            setTimeout(() => {
+              setValue('tipoUsoEdificacao', valorId as any);
+            }, 100);
+            break;
+          case 'TipoPosse':
+            setValoresPersonalizadosTipoPosse(valoresAtualizados);
+            setOpcoesTipoPosse([
+              ...opcoesDeTipoPosse,
+              ...valoresAtualizados.map(v => ({
+                value: (v.id || v.Id) as string,
+                label: (v.valor || v.Valor) as string,
+                personalizado: true
+              }))
+            ]);
+            // Selecionar automaticamente o novo valor adicionado
+            setTimeout(() => {
+              setValue('tipoPosse', valorId as any);
+            }, 100);
+            break;
+          // Adicionar outros casos conforme necessário
+          case 'StatusTransferencia':
+            setValoresPersonalizadosStatusTransferencia(valoresAtualizados);
+            setOpcoesStatusTransferencia(valoresPersonalizadosService.combinarValores(opcoesDeStatusTransferencia, valoresAtualizados));
+            setTimeout(() => {
+              setValue('statusTransferencia', valorLabel as any);
+            }, 100);
+            break;
+        }
+      } else {
+        // Se não encontrar o novo valor, apenas atualizar as opções
+        switch (categoria) {
+          case 'Finalidade':
+            setValoresPersonalizadosFinalidade(valoresAtualizados);
+            setOpcoesFinaldiade(valoresPersonalizadosService.combinarValores(opcoesDeFinaldiade, valoresAtualizados));
+            break;
+          case 'TipoImovel':
+            setValoresPersonalizadosTipoImovel(valoresAtualizados);
+            setOpcoesTipoImovel(valoresPersonalizadosService.combinarValores(opcoesDeTipoImovel, valoresAtualizados));
+            break;
+          case 'TipoUsoEdificacao':
+            setValoresPersonalizadosTipoUsoEdificacao(valoresAtualizados);
+            setOpcoesTipoUsoEdificacao(valoresPersonalizadosService.combinarValores(opcoesDeTipoUsoEdificacao, valoresAtualizados));
+            break;
+          case 'TipoPosse':
+            setValoresPersonalizadosTipoPosse(valoresAtualizados);
+            setOpcoesTipoPosse(valoresPersonalizadosService.combinarValores(opcoesDeTipoPosse, valoresAtualizados));
+            break;
+          case 'StatusTransferencia':
+            setValoresPersonalizadosStatusTransferencia(valoresAtualizados);
+            setOpcoesStatusTransferencia(valoresPersonalizadosService.combinarValores(opcoesDeStatusTransferencia, valoresAtualizados));
+            break;
+        }
+      }
+
+      // Exibir mensagem de sucesso
+      // Se estiver usando react-toastify: toast.success('Valor adicionado com sucesso!');
+      setMensagemSucesso('Valor personalizado adicionado com sucesso!');
+      setTimeout(() => setMensagemSucesso(''), 3000);
+      setCarregandoValoresPersonalizados(false);
+    } catch (err) {
+      console.error('Erro ao adicionar valor personalizado:', err);
+      // Se estiver usando react-toastify: toast.error('Erro ao adicionar valor personalizado');
+      setError('Erro ao adicionar valor personalizado. Tente novamente.');
+      setTimeout(() => setError(''), 3000);
+      setCarregandoValoresPersonalizados(false);
+    }
+  };
+  
+  // Efeito para carregar os valores personalizados ao montar o componente
+  useEffect(() => {
+    const carregarValoresPersonalizados = async () => {
+      try {
+        console.log('Carregando valores personalizados...');
+        
+        // Carregar valores personalizados para cada categoria
+        const finalidade = await valoresPersonalizadosService.buscarValoresPersonalizados('Finalidade');
+        const tipoImovel = await valoresPersonalizadosService.buscarValoresPersonalizados('TipoImovel');
+        const tipoUsoEdificacao = await valoresPersonalizadosService.buscarValoresPersonalizados('TipoUsoEdificacao');
+        const tipoPosse = await valoresPersonalizadosService.buscarValoresPersonalizados('TipoPosse');
+        const statusTransferencia = await valoresPersonalizadosService.buscarValoresPersonalizados('StatusTransferencia');
+        
+        console.log('Valores personalizados recebidos:');
+        console.log('Finalidade:', finalidade);
+        console.log('TipoImovel:', tipoImovel);
+        console.log('TipoUsoEdificacao:', tipoUsoEdificacao);
+        console.log('TipoPosse:', tipoPosse);
+        console.log('StatusTransferencia:', statusTransferencia);
+        
+        // Atualizar os estados
+        setValoresPersonalizadosFinalidade(finalidade);
+        setValoresPersonalizadosTipoImovel(tipoImovel);
+        setValoresPersonalizadosTipoUsoEdificacao(tipoUsoEdificacao);
+        setValoresPersonalizadosTipoPosse(tipoPosse);
+        setValoresPersonalizadosStatusTransferencia(statusTransferencia);
+        
+        // Combinar valores padrão com personalizados
+        setOpcoesFinaldiade(valoresPersonalizadosService.combinarValores(opcoesDeFinaldiade, finalidade));
+        setOpcoesTipoImovel(valoresPersonalizadosService.combinarValores(opcoesDeTipoImovel, tipoImovel));
+        setOpcoesTipoUsoEdificacao(valoresPersonalizadosService.combinarValores(opcoesDeTipoUsoEdificacao, tipoUsoEdificacao));
+        setOpcoesTipoPosse(valoresPersonalizadosService.combinarValores(opcoesDeTipoPosse, tipoPosse));
+        setOpcoesStatusTransferencia(valoresPersonalizadosService.combinarValores(opcoesDeStatusTransferencia, statusTransferencia));
+        
+        // Verificar se os valores foram combinados corretamente
+        console.log('Valores combinados:');
+        console.log('Finalidade:', valoresPersonalizadosService.combinarValores(opcoesDeFinaldiade, finalidade));
+        console.log('TipoImovel:', valoresPersonalizadosService.combinarValores(opcoesDeTipoImovel, tipoImovel));
+        console.log('TipoUsoEdificacao:', valoresPersonalizadosService.combinarValores(opcoesDeTipoUsoEdificacao, tipoUsoEdificacao));
+        console.log('TipoPosse:', valoresPersonalizadosService.combinarValores(opcoesDeTipoPosse, tipoPosse));
+        console.log('StatusTransferencia:', valoresPersonalizadosService.combinarValores(opcoesDeStatusTransferencia, statusTransferencia));
+      } catch (error) {
+        console.error('Erro ao carregar valores personalizados:', error);
+      }
+    };
+    
+    carregarValoresPersonalizados();
+  }, []);
   
   // Carregar dados do imóvel
   useEffect(() => {
@@ -269,8 +556,8 @@ export default function EditarImovel() {
             {/* Seção 1: Informações Básicas */}
             <div>
               <h3 className={`text-lg font-medium mb-4 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Informações Básicas</h3>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
                 <label htmlFor="matricula" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                   Matrícula*
                 </label>
@@ -337,16 +624,29 @@ export default function EditarImovel() {
                 <label htmlFor="finalidade" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                   Finalidade*
                 </label>
-                <select
-                  id="finalidade"
-                  className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.finalidade ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                  {...register('finalidade', { required: 'Finalidade é obrigatória' })}
-                >
-                  <option value="" disabled>Selecione uma finalidade</option>
-                  {opcoesDeFinaldiade.map((opcao) => (
-                    <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <CustomizableSelect
+                    id="finalidade"
+                    name="finalidade"
+                    value={watch('finalidade') || ''}
+                    onChange={(e) => {
+                      const event = { target: { name: 'finalidade', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                      register('finalidade', { required: 'Finalidade é obrigatória' }).onChange(event);
+                    }}
+                    options={opcoesFinaldiade}
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.finalidade ? 'border-danger-500 focus:ring-danger-500' : ''}`}
+                    placeholder="Selecione uma finalidade"
+                    required
+                    onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('Finalidade', deletedValue)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => abrirModalValorPersonalizado('Finalidade')}
+                    className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
                 {errors.finalidade && (
                   <p className="mt-1 text-xs text-danger-600">{errors.finalidade.message}</p>
                 )}
@@ -356,97 +656,133 @@ export default function EditarImovel() {
                 <label htmlFor="tipoImovel" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                   Tipo do Imóvel*
                 </label>
-                <select
-                  id="tipoImovel"
-                  className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoImovel ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                  {...register('tipoImovel', { required: 'Tipo do imóvel é obrigatório' })}
-                >
-                  <option value="" disabled>Selecione um tipo de imóvel</option>
-                  {opcoesDeTipoImovel.map((opcao) => (
-                    <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <CustomizableSelect
+                    id="tipoImovel"
+                    name="tipoImovel"
+                    value={watch('tipoImovel') || ''}
+                    onChange={(e) => {
+                      const event = { target: { name: 'tipoImovel', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                      register('tipoImovel', { required: 'Tipo do imóvel é obrigatório' }).onChange(event);
+                    }}
+                    options={opcoesTipoImovel}
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoImovel ? 'border-danger-500 focus:ring-danger-500' : ''}`}
+                    placeholder="Selecione um tipo de imóvel"
+                    required
+                    onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoImovel', deletedValue)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => abrirModalValorPersonalizado('TipoImovel')}
+                    className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
                 {errors.tipoImovel && (
                   <p className="mt-1 text-xs text-danger-600">{errors.tipoImovel.message}</p>
                 )}
               </div>
-            </div>
-            </div>
-
-            {/* Seção 2: Classificação do Imóvel */}
-            <div>
-              <h3 className={`text-lg font-medium mb-4 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Classificação do Imóvel</h3>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div>
-                  <label htmlFor="tipoUsoEdificacao" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                    Tipo de Uso e Edificação*
-                  </label>
-                  <select
+              
+              <div>
+                <label htmlFor="tipoUsoEdificacao" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                  Tipo de Uso da Edificação
+                </label>
+                <div className="flex gap-2">
+                  <CustomizableSelect
                     id="tipoUsoEdificacao"
-                    className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoUsoEdificacao ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                    {...register('tipoUsoEdificacao', { required: 'Tipo de uso é obrigatório' })}
-                  >
-                    <option value="" disabled>Selecione um tipo de uso</option>
-                    {opcoesDeTipoUsoEdificacao.map((opcao) => (
-                      <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="tipoPosse" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                    Tipo de Posse*
-                  </label>
-                  <select
-                    id="tipoPosse"
-                    className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoPosse ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                    {...register('tipoPosse', { required: 'Tipo de posse é obrigatório' })}
-                  >
-                    <option value="" disabled>Selecione um tipo de posse</option>
-                    {opcoesDeTipoPosse.map((opcao) => (
-                      <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label htmlFor="statusTransferencia" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                    Status de Transferência*
-                  </label>
-                  <select
-                    id="statusTransferencia"
-                    className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.statusTransferencia ? 'border-danger-500 focus:ring-danger-500' : ''}`}
-                    {...register('statusTransferencia', { required: 'Status de transferência é obrigatório' })}
-                  >
-                    <option value="" disabled>Selecione um status de transferência</option>
-                    {opcoesDeStatusTransferencia.map((opcao) => (
-                      <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                    ))}
-                  </select>
-                  {errors.statusTransferencia && (
-                    <p className="mt-1 text-xs text-danger-600">{errors.statusTransferencia.message}</p>
-                  )}
-                </div>
-                
-                {/* Campo Imóvel Principal removido para evitar problemas */}
-                <input type="hidden" {...register('imovelPaiId')} />
-
-                <div>
-                  <label htmlFor="matriculasOriginadas" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                    Matrículas Originadas
-                  </label>
-                  <input
-                    type="text"
-                    id="matriculasOriginadas"
-                    placeholder="Separadas por vírgula"
-                    className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
-                    {...register('matriculasOriginadas')}
+                    name="tipoUsoEdificacao"
+                    value={watch('tipoUsoEdificacao') || ''}
+                    onChange={(e) => {
+                      const event = { target: { name: 'tipoUsoEdificacao', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                      register('tipoUsoEdificacao').onChange(event);
+                    }}
+                    options={opcoesTipoUsoEdificacao}
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                    placeholder="Selecione um tipo de uso"
+                    onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoUsoEdificacao', deletedValue)}
                   />
-                  <p className={`mt-1 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Informe as matrículas originadas deste imóvel, separadas por vírgula.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => abrirModalValorPersonalizado('TipoUsoEdificacao')}
+                    className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
+              
+              <div>
+                <label htmlFor="tipoPosse" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                  Tipo de Posse
+                </label>
+                <div className="flex gap-2">
+                  <CustomizableSelect
+                    id="tipoPosse"
+                    name="tipoPosse"
+                    value={watch('tipoPosse') || ''}
+                    onChange={(e) => {
+                      const event = { target: { name: 'tipoPosse', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                      register('tipoPosse').onChange(event);
+                    }}
+                    options={opcoesTipoPosse}
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                    placeholder="Selecione um tipo de posse"
+                    onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoPosse', deletedValue)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => abrirModalValorPersonalizado('TipoPosse')}
+                    className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="statusTransferencia" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                  Status de Transferência
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    id="statusTransferencia"
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                    {...register('statusTransferencia')}
+                    key={`statusTransferencia-${valoresPersonalizadosStatusTransferencia.length}`}
+                  >
+                    <option value="">Selecione um status</option>
+                    {opcoesStatusTransferencia.map((opcao) => (
+                      <option key={opcao.value} value={opcao.value}>
+                        {opcao.label}{opcao.personalizado ? ' (Personalizado)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => abrirModalValorPersonalizado('StatusTransferencia')}
+                    className={`mt-1 px-3 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="matriculasOriginadas" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                Matrículas Originadas
+              </label>
+              <input
+                type="text"
+                id="matriculasOriginadas"
+                placeholder="Separadas por vírgula"
+                className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                {...register('matriculasOriginadas')}
+              />
+              <p className={`mt-1 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Informe as matrículas originadas deste imóvel, separadas por vírgula.
+              </p>
+            </div>
             </div>
 
             {/* Seção 3: Localização */}
@@ -624,6 +960,19 @@ export default function EditarImovel() {
           </button>
         </div>
       </form>
+      
+      {/* Modal para adicionar valores personalizados */}
+      <CustomValueModal
+        isOpen={modalAberto !== null}
+        onClose={() => setModalAberto(null)}
+        onSave={(valor) => {
+          if (modalAberto) {
+            adicionarNovoValor(modalAberto, valor);
+          }
+        }}
+        title={tituloModal}
+        darkMode={darkMode}
+      />
     </div>
   );
 }

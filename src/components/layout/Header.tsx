@@ -1,4 +1,4 @@
-import { Menu, Search, LogOut, Moon, Sun } from 'lucide-react';
+import { Menu, LogOut, Moon, Sun, User } from 'lucide-react';
 import cehopLogo from '/cropped-cehop123-1.png';
 import { useDatabaseStatus } from '../DatabaseStatus';
 import { useEffect, useState } from 'react';
@@ -13,9 +13,8 @@ interface HeaderProps {
 export default function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('Usuário');
-  const [userInitials, setUserInitials] = useState('U');
   const { darkMode, toggleDarkMode } = useTheme();
-  const { isConnected, lastCheck } = useDatabaseStatus();
+  const { isConnected } = useDatabaseStatus();
   
   useEffect(() => {
     try {
@@ -23,15 +22,6 @@ export default function Header({ onMenuClick }: HeaderProps) {
       if (userDataStr) {
         const userData = JSON.parse(userDataStr);
         setUserName(userData.nome || 'Usuário');
-        
-        if (userData.nome) {
-          const nameParts = userData.nome.split(' ');
-          setUserInitials(
-            nameParts.length > 1
-              ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
-              : nameParts[0].substring(0, 2).toUpperCase()
-          );
-        }
       }
     } catch (err) {
       console.error('Erro ao obter dados do usuário:', err);
@@ -68,19 +58,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </a>
           </div>
 
-          {/* Barra de Pesquisa */}
-          <div className="hidden lg:block flex-1 max-w-2xl px-8">
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-              />
-              <input
-                type="search"
-                placeholder="Pesquisar imóveis..."
-                className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder:text-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
-          </div>
+          {/* Espaço flexível para centralizar os elementos restantes */}
+          <div className="hidden lg:block flex-1"></div>
 
           {/* Status do Banco e Usuário */}
           <div className="flex items-center gap-6">
@@ -95,9 +74,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-full bg-primary-600 text-white flex items-center justify-center text-sm font-medium shadow-sm">
-                  {userInitials}
+                  <User className="h-5 w-5" />
                 </div>
-                <span className="hidden md:block text-sm font-medium text-gray-900">
+                <span className="hidden md:block text-sm font-medium text-gray-900 dark:text-gray-100">
                   {userName}
                 </span>
               </div>
