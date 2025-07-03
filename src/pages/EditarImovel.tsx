@@ -14,62 +14,16 @@ import CustomValueModal from '../components/CustomValueModal';
 import { 
   ImovelFormData
 } from '../types/imovel';
-// Opções para os selects com valores exatos do banco de dados
-const opcoesDeFinaldiade = [
-  { value: 'Agricultura', label: 'Agricultura' },
-  { value: 'Comercial', label: 'Comercial' },
-  { value: 'Comércio', label: 'Comércio' },
-  { value: 'Habitação', label: 'Habitação' },
-  { value: 'Industrial', label: 'Industrial' },
-  { value: 'Indústria', label: 'Indústria' },
-  { value: 'Misto', label: 'Misto' },
-  { value: 'Residencial', label: 'Residencial' },
-  { value: 'Rural', label: 'Rural' },
-  { value: 'Serviços', label: 'Serviços' },
-  { value: 'Outros', label: 'Outros' }
-];
+// Opções para os selects - arrays vazios para usar apenas valores personalizados
+const opcoesDeFinaldiade: OpcaoSelect[] = [];
 
-const opcoesDeTipoImovel = [
-  { value: 'Apartamento', label: 'Apartamento' },
-  { value: 'Casa', label: 'Casa' },
-  { value: 'Comercial', label: 'Comercial' },
-  { value: 'Industrial', label: 'Industrial' },
-  { value: 'Residencial', label: 'Residencial' },
-  { value: 'Rural', label: 'Rural' },
-  { value: 'Terreno', label: 'Terreno' },
-  { value: 'Outros', label: 'Outros' }
-];
+const opcoesDeTipoImovel: OpcaoSelect[] = [];
 
-const opcoesDeStatusTransferencia = [
-  { value: 'Cancelado', label: 'Cancelado' },
-  { value: 'Disponível', label: 'Disponível' },
-  { value: 'Em processo', label: 'Em processo' },
-  { value: 'Em Transferência', label: 'Em Transferência' },
-  { value: 'Não Aplicável', label: 'Não Aplicável' },
-  { value: 'Não transferido', label: 'Não transferido' },
-  { value: 'Pendente', label: 'Pendente' },
-  { value: 'Regularizado', label: 'Regularizado' },
-  { value: 'Transferido', label: 'Transferido' }
-];
+const opcoesDeStatusTransferencia: OpcaoSelect[] = [];
 
-const opcoesDeTipoPosse = [
-  { value: 'Cedido', label: 'Cedido' },
-  { value: 'Comodato', label: 'Comodato' },
-  { value: 'Locatário', label: 'Locatário (Alugado)' },
-  { value: 'Proprietário', label: 'Proprietário' },
-  { value: 'Outros', label: 'Outros' }
-];
+const opcoesDeTipoPosse: OpcaoSelect[] = [];
 
-const opcoesDeTipoUsoEdificacao = [
-  { value: 'Comercial', label: 'Comercial' },
-  { value: 'Industrial', label: 'Industrial' },
-  { value: 'Misto', label: 'Misto' },
-  { value: 'Residencial', label: 'Residencial' },
-  { value: 'Residencial Multifamiliar', label: 'Residencial Multifamiliar' },
-  { value: 'Residencial Unifamiliar', label: 'Residencial Unifamiliar' },
-  { value: 'Terreno sem edificação', label: 'Terreno sem edificação' },
-  { value: 'Outros', label: 'Outros' }
-];
+const opcoesDeTipoUsoEdificacao: OpcaoSelect[] = [];
 
 import { obterImovelPorId, listarImoveisPrincipais, atualizarImovel } from '../services/imovelService';
 
@@ -104,7 +58,10 @@ export default function EditarImovel() {
   const [opcoesTipoPosse, setOpcoesTipoPosse] = useState<OpcaoSelect[]>(opcoesDeTipoPosse);
   const [opcoesStatusTransferencia, setOpcoesStatusTransferencia] = useState<OpcaoSelect[]>(opcoesDeStatusTransferencia);
   
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue } = useForm<ImovelFormData>();
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue, setError: setFormError } = useForm<ImovelFormData>({
+    mode: 'onBlur', // Validar ao perder o foco para melhor experiência do usuário
+    shouldFocusError: true // Focar automaticamente no primeiro campo com erro
+  });
   
   // Função para excluir um valor personalizado
   const handleDeleteCustomValue = async (categoria: string, valorToDelete: string) => {
@@ -438,11 +395,67 @@ export default function EditarImovel() {
     carregarDados();
   }, [id, reset, navigate]);
   
+  // Função para validar campos de seleção antes do envio
+  const validarCamposSelecao = (data: ImovelFormData) => {
+    // Verificar se os campos de seleção obrigatórios estão preenchidos com valores válidos
+    const camposObrigatorios = [
+      { campo: 'finalidade', nome: 'Finalidade', mensagem: 'Finalidade é obrigatória' },
+      { campo: 'tipoImovel', nome: 'Tipo do Imóvel', mensagem: 'Tipo do imóvel é obrigatório' },
+      { campo: 'tipoUsoEdificacao', nome: 'Tipo de Uso e Edificação', mensagem: 'Tipo de uso é obrigatório' },
+      { campo: 'tipoPosse', nome: 'Tipo de Posse', mensagem: 'Tipo de posse é obrigatório' },
+      { campo: 'statusTransferencia', nome: 'Status de Transferência', mensagem: 'Status de transferência é obrigatório' }
+    ];
+    
+    let camposInvalidos: string[] = [];
+    let todosValidos = true;
+    
+    camposObrigatorios.forEach(({ campo, nome, mensagem }) => {
+      const valor = data[campo as keyof ImovelFormData];
+      if (!valor) {
+        camposInvalidos.push(nome);
+        // Definir erro manualmente para o campo
+        setValue(campo as any, '', { shouldValidate: true });
+        // Forçar o erro a ser registrado no objeto errors
+        setFormError(campo as any, {
+          type: 'manual',
+          message: mensagem
+        });
+        todosValidos = false;
+      }
+    });
+    
+    if (camposInvalidos.length > 0) {
+      console.error('Campos obrigatórios não preenchidos:', camposInvalidos);
+      
+      // Scroll para o primeiro elemento com erro
+      setTimeout(() => {
+        // Obter todos os elementos com erro
+        const elementosComErro = document.querySelectorAll('.border-danger-500');
+        if (elementosComErro.length > 0) {
+          // Scroll para o primeiro elemento com erro
+          elementosComErro[0].scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
+      }, 100); // Pequeno delay para garantir que os erros foram renderizados
+      
+      return false;
+    }
+    
+    return todosValidos;
+  };
+
   const onSubmit = async (data: ImovelFormData) => {
     // Verificar se o banco de dados está conectado
     if (!isConnected) {
       setError('Não é possível editar imóveis enquanto o banco de dados estiver desconectado. Entre em contato com o setor de T.I.');
       return;
+    }
+    
+    // Validar campos de seleção antes de prosseguir
+    if (!validarCamposSelecao(data)) {
+      return; // Interromper o envio se a validação falhar
     }
     
     try {
@@ -550,7 +563,23 @@ export default function EditarImovel() {
       </div>
       
       {/* Formulário */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form 
+        onSubmit={handleSubmit(onSubmit, (errors) => {
+          // Callback de erro do formulário - executa quando há erros de validação
+          console.error('Erros de validação:', errors);
+          // Scroll para o primeiro elemento com erro
+          setTimeout(() => {
+            const elementosComErro = document.querySelectorAll('.border-danger-500');
+            if (elementosComErro.length > 0) {
+              elementosComErro[0].scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+              });
+            }
+          }, 100);
+        })} 
+        className="space-y-6"
+      >
         <div className={`card p-6 ${darkMode ? 'bg-gray-900 border border-gray-700' : ''}`}>
           <div className="space-y-8">
             {/* Seção 1: Informações Básicas */}
@@ -631,7 +660,10 @@ export default function EditarImovel() {
                     value={watch('finalidade') || ''}
                     onChange={(e) => {
                       const event = { target: { name: 'finalidade', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
-                      register('finalidade', { required: 'Finalidade é obrigatória' }).onChange(event);
+                      register('finalidade', { 
+                        required: 'Finalidade é obrigatória',
+                        validate: value => !!value || 'Selecione uma finalidade válida'
+                      }).onChange(event);
                     }}
                     options={opcoesFinaldiade}
                     className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.finalidade ? 'border-danger-500 focus:ring-danger-500' : ''}`}
@@ -663,7 +695,10 @@ export default function EditarImovel() {
                     value={watch('tipoImovel') || ''}
                     onChange={(e) => {
                       const event = { target: { name: 'tipoImovel', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
-                      register('tipoImovel', { required: 'Tipo do imóvel é obrigatório' }).onChange(event);
+                      register('tipoImovel', { 
+                        required: 'Tipo do imóvel é obrigatório',
+                        validate: value => !!value || 'Selecione um tipo de imóvel válido'
+                      }).onChange(event);
                     }}
                     options={opcoesTipoImovel}
                     className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoImovel ? 'border-danger-500 focus:ring-danger-500' : ''}`}
@@ -686,7 +721,7 @@ export default function EditarImovel() {
               
               <div>
                 <label htmlFor="tipoUsoEdificacao" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                  Tipo de Uso da Edificação
+                  Tipo de Uso da Edificação*
                 </label>
                 <div className="flex gap-2">
                   <CustomizableSelect
@@ -695,11 +730,15 @@ export default function EditarImovel() {
                     value={watch('tipoUsoEdificacao') || ''}
                     onChange={(e) => {
                       const event = { target: { name: 'tipoUsoEdificacao', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
-                      register('tipoUsoEdificacao').onChange(event);
+                      register('tipoUsoEdificacao', { 
+                        required: 'Tipo de uso é obrigatório',
+                        validate: value => !!value || 'Selecione um tipo de uso válido'
+                      }).onChange(event);
                     }}
                     options={opcoesTipoUsoEdificacao}
-                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoUsoEdificacao ? 'border-danger-500 focus:ring-danger-500' : ''}`}
                     placeholder="Selecione um tipo de uso"
+                    required
                     onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoUsoEdificacao', deletedValue)}
                   />
                   <button
@@ -710,11 +749,14 @@ export default function EditarImovel() {
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
+                {errors.tipoUsoEdificacao && (
+                  <p className="mt-1 text-xs text-danger-600">{errors.tipoUsoEdificacao.message}</p>
+                )}
               </div>
               
               <div>
                 <label htmlFor="tipoPosse" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                  Tipo de Posse
+                  Tipo de Posse*
                 </label>
                 <div className="flex gap-2">
                   <CustomizableSelect
@@ -723,11 +765,15 @@ export default function EditarImovel() {
                     value={watch('tipoPosse') || ''}
                     onChange={(e) => {
                       const event = { target: { name: 'tipoPosse', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
-                      register('tipoPosse').onChange(event);
+                      register('tipoPosse', { 
+                        required: 'Tipo de posse é obrigatório',
+                        validate: value => !!value || 'Selecione um tipo de posse válido'
+                      }).onChange(event);
                     }}
                     options={opcoesTipoPosse}
-                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.tipoPosse ? 'border-danger-500 focus:ring-danger-500' : ''}`}
                     placeholder="Selecione um tipo de posse"
+                    required
                     onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('TipoPosse', deletedValue)}
                   />
                   <button
@@ -738,26 +784,33 @@ export default function EditarImovel() {
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
+                {errors.tipoPosse && (
+                  <p className="mt-1 text-xs text-danger-600">{errors.tipoPosse.message}</p>
+                )}
               </div>
               
               <div>
                 <label htmlFor="statusTransferencia" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                  Status de Transferência
+                  Status de Transferência*
                 </label>
                 <div className="flex gap-2">
-                  <select
+                  <CustomizableSelect
                     id="statusTransferencia"
-                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
-                    {...register('statusTransferencia')}
-                    key={`statusTransferencia-${valoresPersonalizadosStatusTransferencia.length}`}
-                  >
-                    <option value="">Selecione um status</option>
-                    {opcoesStatusTransferencia.map((opcao) => (
-                      <option key={opcao.value} value={opcao.value}>
-                        {opcao.label}{opcao.personalizado ? ' (Personalizado)' : ''}
-                      </option>
-                    ))}
-                  </select>
+                    name="statusTransferencia"
+                    value={watch('statusTransferencia') || ''}
+                    onChange={(e) => {
+                      const event = { target: { name: 'statusTransferencia', value: e.target.value } } as React.ChangeEvent<HTMLInputElement>;
+                      register('statusTransferencia', { 
+                        required: 'Status de transferência é obrigatório',
+                        validate: value => !!value || 'Selecione um status de transferência válido'
+                      }).onChange(event);
+                    }}
+                    options={opcoesStatusTransferencia}
+                    className={`input mt-1 flex-grow ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''} ${errors.statusTransferencia ? 'border-danger-500 focus:ring-danger-500' : ''}`}
+                    placeholder="Selecione um status"
+                    required
+                    onCustomValueDeleted={(deletedValue) => handleDeleteCustomValue('StatusTransferencia', deletedValue)}
+                  />
                   <button
                     type="button"
                     onClick={() => abrirModalValorPersonalizado('StatusTransferencia')}
@@ -766,21 +819,23 @@ export default function EditarImovel() {
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
+                {errors.statusTransferencia && (
+                  <p className="mt-1 text-xs text-danger-600">{errors.statusTransferencia.message}</p>
+                )}
               </div>
             </div>
-            <div>
+            <div className="mt-6">
               <label htmlFor="matriculasOriginadas" className={`block text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-700'}`}>
                 Matrículas Originadas
               </label>
               <input
                 type="text"
-                id="matriculasOriginadas"
-                placeholder="Separadas por vírgula"
+                id="matriculasOriginadas" 
                 className={`input mt-1 ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200' : ''}`}
                 {...register('matriculasOriginadas')}
               />
               <p className={`mt-1 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Informe as matrículas originadas deste imóvel, separadas por vírgula.
+                Informe as matrículas originadas deste imóvel.
               </p>
             </div>
             </div>

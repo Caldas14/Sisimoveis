@@ -316,7 +316,7 @@ export default function DetalhesImovel() {
               <ExcelExporterExcelJS 
                 imovel={imovel} 
                 imoveisSecundarios={imoveisSecundarios} 
-                buttonText="Exportar Excel"
+                buttonText="Exportar LibreOffice/Excel"
               />
             )}
             
@@ -590,12 +590,14 @@ function DetalhesTab({ imovel, imoveisSecundarios = [] }: { imovel: Imovel, imov
             <div className="mt-2">
               <div className="flex justify-between text-sm mb-1">
                 <span className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Área Desmembrada</span>
-                <span className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{percentualDesmembrado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                <span className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} ${percentualDesmembrado > 100 ? 'text-red-500 font-bold' : ''}`}>
+                  {percentualDesmembrado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                </span>
               </div>
               <div className={`w-full rounded-full h-2.5 ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
                 <div 
                   className={`h-2.5 rounded-full ${temInconsistenciaArea ? 'bg-yellow-500' : 'bg-green-500'}`} 
-                  style={{ width: `${percentualDesmembrado}%` }}
+                  style={{ width: `${Math.min(percentualDesmembrado, 100)}%` }}
                 ></div>
               </div>
             </div>

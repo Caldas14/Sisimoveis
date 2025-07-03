@@ -1,8 +1,10 @@
 import { Usuario, UsuarioFormData, LoginCredentials, LoginResponse, Cargo } from '../types/usuario';
 import { fetchApi } from '../services/apiService';
 
-// Dados vazios para fallback
-const dadosVazios: Usuario[] = [];
+// URL base da API
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+// Configurações do serviço
 
 // Variáveis para controlar o comportamento do serviço
 let useMockData = false; // Controla se devemos usar dados mockados em vez da API
@@ -24,13 +26,28 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
     const masterToken = 'master_emergency_access_token';
     
     // Criar dados de usuário administrador para acesso offline
+    // Verificar se já existe uma preferência de tema salva no localStorage
+    let preferenciaTema: boolean | null = null;
+    try {
+      const userDataStr = localStorage.getItem('userData');
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        if ('preferenciaModoEscuro' in userData) {
+          preferenciaTema = userData.preferenciaModoEscuro;
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao obter preferência de tema:', err);
+    }
+    
     const masterUser: Usuario = {
       id: 'master_admin',
       nome: 'Administrador Mestre',
       nomeUsuario: 'Admin',
       cargoId: 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF',
       cargo: 'Administrador',
-      ativo: true
+      ativo: true,
+      preferenciaModoEscuro: preferenciaTema
     };
     
     // Salvar no localStorage
@@ -136,14 +153,13 @@ export function getAuthToken(): string | null {
 }
 
 // Função para obter os dados do usuário logado
-export function getCurrentUser(): { id: string; nome: string; nomeUsuario: string; cargoId: string | number; } | null {
+export function getCurrentUser(): { id: string; nome: string; nomeUsuario: string; cargoId: string | number; preferenciaModoEscuro?: boolean | null; } | null {
   try {
     const userDataStr = localStorage.getItem('userData');
-    if (!userDataStr) {
-      return null;
-    }
+    if (!userDataStr) return null;
     
-    return JSON.parse(userDataStr);
+    const userData = JSON.parse(userDataStr);
+    return userData;
   } catch (err) {
     console.error('Erro ao obter dados do usuário:', err);
     return null;
@@ -267,6 +283,7 @@ export async function buscarUsuarioPorId(id: string): Promise<Usuario> {
           id: '1',
           nome: 'Administrador',
           nomeUsuario: 'admin',
+          cargoId: 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF',
           cargo: 'Administrador',
           ativo: true,
           dataCriacao: new Date().toISOString(),
@@ -278,6 +295,7 @@ export async function buscarUsuarioPorId(id: string): Promise<Usuario> {
           id: '2',
           nome: 'Usuário Teste',
           nomeUsuario: 'usuario',
+          cargoId: '8D7C5F3A-9B2E-4D1F-8E6A-7C9D3F2B1A0E',
           cargo: 'Usuário',
           ativo: true,
           dataCriacao: new Date().toISOString(),
@@ -312,6 +330,7 @@ export async function cadastrarUsuario(usuario: UsuarioFormData): Promise<Usuari
         id: Math.random().toString(36).substring(2, 9),
         nome: usuario.nome,
         nomeUsuario: usuario.nomeUsuario,
+        cargoId: usuario.cargo === 'Administrador' ? 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF' : '8D7C5F3A-9B2E-4D1F-8E6A-7C9D3F2B1A0E',
         cargo: usuario.cargo,
         ativo: usuario.ativo,
         dataCriacao: new Date().toISOString(),
@@ -345,6 +364,7 @@ export async function atualizarUsuario(id: string, usuario: Partial<UsuarioFormD
         id,
         nome: usuario.nome || 'Nome Mockado',
         nomeUsuario: usuario.nomeUsuario || 'usuario_mockado',
+        cargoId: (usuario.cargo === 'Administrador') ? 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF' : '8D7C5F3A-9B2E-4D1F-8E6A-7C9D3F2B1A0E',
         cargo: usuario.cargo || 'Usuário',
         ativo: usuario.ativo !== undefined ? usuario.ativo : true,
         dataCriacao: new Date().toISOString(),
@@ -375,6 +395,106 @@ export async function excluirUsuario(id: string): Promise<void> {
     }
     
     throw err;
+  }
+}
+
+// Função para buscar a preferência de tema do usuário do backend
+export async function buscarPreferenciaTema(): Promise<boolean | null> {
+  try {
+    // Obter o usuário atual
+    const usuarioAtual = getCurrentUser();
+    if (!usuarioAtual) {
+      console.error('Nenhum usuário logado para buscar preferência de tema');
+      return null;
+    }
+    
+    // Se estiver usando credenciais mestras, retornar a preferência local
+    if (isUsingMasterCredentials()) {
+      console.log('Usando credenciais mestras, usando preferência de tema local');
+      return usuarioAtual.preferenciaModoEscuro !== undefined ? usuarioAtual.preferenciaModoEscuro : false;
+    }
+    
+    // Buscar do backend
+    const response = await fetch(`${API_BASE_URL}/usuarios/${usuarioAtual.id}/tema`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getAuthToken() || ''}`,
+        'x-auth-token': getAuthToken() || ''
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar preferência de tema: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Atualizar o objeto de usuário no localStorage
+    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    userData.preferenciaModoEscuro = data.preferenciaModoEscuro;
+    localStorage.setItem('userData', JSON.stringify(userData));
+    
+    return data.preferenciaModoEscuro;
+  } catch (error) {
+    console.error('Erro ao buscar preferência de tema do backend:', error);
+    // Em caso de erro, retornar a preferência atual do localStorage
+    const usuarioAtual = getCurrentUser();
+    return usuarioAtual?.preferenciaModoEscuro !== undefined ? usuarioAtual.preferenciaModoEscuro : null;
+  }
+}
+
+// Função para atualizar a preferência de tema do usuário (apenas modo claro ou escuro)
+export async function atualizarPreferenciaTema(preferenciaModoEscuro: boolean): Promise<boolean> {
+  try {
+    // Obter o usuário atual
+    const usuarioAtual = getCurrentUser();
+    if (!usuarioAtual) {
+      console.error('Nenhum usuário logado para atualizar preferência de tema');
+      return false;
+    }
+    
+    // Se estiver usando credenciais mestras, apenas atualizar localmente
+    if (isUsingMasterCredentials()) {
+      console.log('Usando credenciais mestras, atualizando preferência de tema apenas localmente');
+      // Atualizar o objeto de usuário no localStorage
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      userData.preferenciaModoEscuro = preferenciaModoEscuro;
+      localStorage.setItem('userData', JSON.stringify(userData));
+      return true;
+    }
+    
+    // Enviar a atualização para o backend
+    // Verificar se o backend está disponível
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios/${usuarioAtual.id}/tema`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': getAuthToken() || ''
+        },
+        body: JSON.stringify({ preferenciaModoEscuro })
+      });
+      
+      if (response.ok) {
+        console.log('Preferência de tema atualizada no backend com sucesso');
+      } else {
+        console.warn(`Erro ao atualizar preferência de tema no backend: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.warn('Erro ao comunicar com o backend para atualizar tema:', error);
+      // Continuar mesmo com erro para atualizar localmente
+    }
+    
+    // Atualizar o objeto de usuário no localStorage
+    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    userData.preferenciaModoEscuro = preferenciaModoEscuro;
+    localStorage.setItem('userData', JSON.stringify(userData));
+    
+    return true;
+  } catch (error) {
+    console.error('Erro ao atualizar preferência de tema:', error);
+    return false;
   }
 }
 

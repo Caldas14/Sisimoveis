@@ -14,7 +14,7 @@ interface ExcelExporterExcelJSProps {
 const ExcelExporterExcelJS: React.FC<ExcelExporterExcelJSProps> = ({ 
   imovel, 
   imoveisSecundarios, 
-  buttonText = 'Exportar Excel' 
+  buttonText = 'Exportar LibreOffice/Excel' 
 }) => {
   const { darkMode } = useTheme();
 

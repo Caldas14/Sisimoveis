@@ -111,6 +111,7 @@ export default function(pool, poolConnect) {
           u.Senha, 
           u.Ativo,
           u.CargoId,
+          u.PreferenciaModoEscuro,
           c.Nome as Cargo
         FROM 
           Usuarios u
@@ -162,7 +163,8 @@ export default function(pool, poolConnect) {
         nome: usuario.Nome,
         nomeUsuario: usuario.NomeUsuario,
         cargoId: usuario.CargoId,
-        ativo: usuario.Ativo
+        ativo: usuario.Ativo,
+        preferenciaModoEscuro: usuario.PreferenciaModoEscuro === 1 ? true : usuario.PreferenciaModoEscuro === 0 ? false : null
       });
       
       res.json({
@@ -171,7 +173,8 @@ export default function(pool, poolConnect) {
           nome: usuario.Nome,
           nomeUsuario: usuario.NomeUsuario,
           cargoId: usuario.CargoId,
-          ativo: usuario.Ativo
+          ativo: usuario.Ativo,
+          preferenciaModoEscuro: usuario.PreferenciaModoEscuro === 1 ? true : usuario.PreferenciaModoEscuro === 0 ? false : null
         },
         token
       });
@@ -518,6 +521,145 @@ export default function(pool, poolConnect) {
     } catch (err) {
       console.error('Erro ao listar cargos:', err);
       res.status(500).json({ error: 'Erro ao buscar cargos.' });
+    }
+  });
+
+  // Rota para atualizar a preferência de tema do usuário
+  router.put('/:id/tema', authMiddleware, async (req, res) => {
+    try {
+      await poolConnect;
+      const { id } = req.params;
+      const { preferenciaModoEscuro } = req.body;
+      
+      // Verificar permissão: deve ser admin ou o próprio usuário
+      if (req.usuario.id !== id && req.usuario.cargoId !== 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF' && req.usuario.cargoId !== 1) {
+        return res.status(403).json({ error: 'Acesso negado. Você só pode atualizar sua própria preferência de tema.' });
+      }
+      
+      // Verificar se o usuário existe
+      const checkUsuario = await pool.request().query(`
+        SELECT COUNT(*) as count FROM Usuarios WHERE Id = '${sanitizeSqlString(id)}'
+      `);
+      
+      if (checkUsuario.recordset[0].count === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado.' });
+      }
+      
+      // Validar o valor de preferenciaModoEscuro (deve ser true ou false)
+      if (preferenciaModoEscuro !== true && preferenciaModoEscuro !== false) {
+        return res.status(400).json({ 
+          error: 'Valor inválido para preferenciaModoEscuro. Deve ser true ou false.',
+          valorRecebido: preferenciaModoEscuro
+        });
+      }
+      
+      // Verificar se a coluna PreferenciaModoEscuro existe na tabela Usuarios
+      const checkColumn = await pool.request().query(`
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'Usuarios' AND COLUMN_NAME = 'PreferenciaModoEscuro'
+      `);
+      
+      // Se a coluna não existir, retornar erro
+      if (checkColumn.recordset[0].count === 0) {
+        return res.status(500).json({ 
+          error: 'A coluna PreferenciaModoEscuro não existe na tabela Usuarios. Execute o script SQL para criar a coluna.',
+          script: 'sql/add_theme_preference.sql'
+        });
+      }
+      
+      // Converter o valor boolean para bit usando CAST no SQL Server
+      const sqlValue = preferenciaModoEscuro ? 1 : 0;
+      
+      // Atualizar a preferência de tema usando CAST para garantir o tipo correto
+      await pool.request().query(`
+        UPDATE Usuarios
+        SET PreferenciaModoEscuro = CAST(${sqlValue} AS BIT), DataAtualizacao = GETDATE()
+        WHERE Id = '${sanitizeSqlString(id)}'
+      `);
+      
+      // Log para depuração
+      console.log(`Atualizando tema para usuário ${id}: ${preferenciaModoEscuro} (valor SQL: ${sqlValue})`);
+      
+      
+      // Buscar usuário atualizado
+      const result = await pool.request().query(`
+        SELECT 
+          u.Id, 
+          u.Nome, 
+          u.NomeUsuario, 
+          u.Ativo,
+          u.PreferenciaModoEscuro,
+          u.DataCriacao,
+          u.DataAtualizacao
+        FROM 
+          Usuarios u
+        WHERE 
+          u.Id = '${sanitizeSqlString(id)}'
+      `);
+      
+      if (result.recordset.length === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado após atualização.' });
+      }
+      
+      const u = result.recordset[0];
+      
+      res.json({
+        id: u.Id,
+        nome: u.Nome,
+        nomeUsuario: u.NomeUsuario,
+        ativo: u.Ativo,
+        preferenciaModoEscuro: u.PreferenciaModoEscuro === 1 ? true : u.PreferenciaModoEscuro === 0 ? false : null,
+        message: 'Preferência de tema atualizada com sucesso.'
+      });
+    } catch (err) {
+      console.error('Erro ao atualizar preferência de tema:', err);
+      res.status(500).json({ error: 'Erro ao atualizar preferência de tema.', details: err.message });
+    }
+  });
+  
+  // Rota para buscar apenas a preferência de tema do usuário
+  router.get('/:id/tema', authMiddleware, async (req, res) => {
+    try {
+      await poolConnect;
+      const userId = req.params.id;
+      
+      // Verificar se o ID do usuário corresponde ao usuário autenticado ou se é administrador
+      if (req.usuario.id !== userId && req.usuario.cargoId !== 1 && req.usuario.cargoId !== 'F6B3EB7F-55F1-4B4B-A290-9AA59A4800FF') {
+        return res.status(403).json({ error: 'Você não tem permissão para acessar este recurso.' });
+      }
+      
+      // Buscar a preferência de tema do usuário
+      const result = await pool.request().query(`
+        SELECT PreferenciaModoEscuro
+        FROM Usuarios
+        WHERE Id = '${sanitizeSqlString(userId)}'
+      `);
+      
+      if (result.recordset.length === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado.' });
+      }
+      
+      // Obter o valor bruto do SQL Server
+      const valorBruto = result.recordset[0].PreferenciaModoEscuro;
+      
+      // Converter o valor SQL (0, 1 ou null) para boolean
+      let preferenciaModoEscuro;
+      if (valorBruto === 1 || valorBruto === true) {
+        preferenciaModoEscuro = true;
+      } else if (valorBruto === 0 || valorBruto === false) {
+        preferenciaModoEscuro = false;
+      } else {
+        preferenciaModoEscuro = null;
+      }
+      
+      // Adicionar log para depuração
+      console.log(`[GET TEMA] Usuário ${userId} - Valor bruto do banco: ${valorBruto} (tipo: ${typeof valorBruto}) - Convertido para: ${preferenciaModoEscuro}`);
+      
+      res.json({ preferenciaModoEscuro });
+    } catch (err) {
+      console.error('Erro ao buscar preferência de tema:', err);
+      res.status(500).json({ error: 'Erro ao buscar preferência de tema.', details: err.message });
     }
   });
   

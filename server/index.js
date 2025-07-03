@@ -55,11 +55,11 @@ function readDbConfig() {
   } catch (err) {
     console.error('Erro ao ler configuração do banco:', err);
     return {
-      user: process.env.DB_USER || 'sa',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'SistemaCadastroImoveis',
-      server: process.env.DB_SERVER || 'localhost',
-      port: Number(process.env.DB_PORT) || 1433,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      server: process.env.DB_SERVER,
+      port: Number(process.env.DB_PORT),
       options: {
         encrypt: process.env.DB_ENCRYPT === 'true',
         trustServerCertificate: true
@@ -1573,14 +1573,8 @@ async function verificarECriarColunaUsuario() {
 }
 
 // Iniciar o servidor
-const server = app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`Servidor rodando na porta ${PORT} (acessível na rede local em http://25.0.62.72:${PORT})`);
+app.listen(PORT, '0.0.0.0', async () => {
   await testDatabaseConnection();
   await verificarECriarColunaUsuario();
-  console.log('Servidor pronto para receber requisições!');
-});
-
-// Iniciar uma segunda instância para localhost
-const localServer = app.listen(PORT + 1, 'localhost', () => {
-  console.log(`Servidor também está rodando em localhost:${PORT + 1}`);
+  console.log(`Servidor pronto para receber requisições na porta ${PORT}!`);
 });

@@ -110,7 +110,8 @@ const CustomizableSelect: React.FC<CustomizableSelectProps> = ({
         value={value}
         onChange={onChange}
         disabled={disabled}
-        required={required}
+        // Removido o atributo required para evitar erro de validação em campo oculto
+        // A validação será feita pelo React Hook Form
         style={{ display: 'none' }}
         aria-hidden="true"
       >
@@ -130,6 +131,7 @@ const CustomizableSelect: React.FC<CustomizableSelectProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-disabled={disabled}
+        aria-required={required}
         tabIndex={disabled ? -1 : 0}
         onKeyDown={(e) => {
           if ((e.key === 'Enter' || e.key === ' ') && !disabled) {
@@ -189,11 +191,8 @@ const CustomizableSelect: React.FC<CustomizableSelectProps> = ({
               onClick={() => handleSelectOption(option)}
               role="option"
               aria-selected={value === option.value}
-            >
-              <span className="flex-grow">
-                {option.label}
-                {option.personalizado && <span className="ml-1 text-gray-500">(Personalizado)</span>}
-              </span>
+            >   
+              {option.label}    
               
               {option.personalizado && (
                 <button

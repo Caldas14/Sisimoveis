@@ -1,10 +1,11 @@
-import { Menu, LogOut, Moon, Sun, User } from 'lucide-react';
+import { Menu, LogOut, User } from 'lucide-react';
 import cehopLogo from '/cropped-cehop123-1.png';
 import { useDatabaseStatus } from '../DatabaseStatus';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../../services/usuarioService';
 import { useTheme } from '../../contexts/ThemeContext';
+import ThemeSelector from '../ThemeSelector';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -13,7 +14,7 @@ interface HeaderProps {
 export default function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('Usuário');
-  const { darkMode, toggleDarkMode } = useTheme();
+  const { darkMode } = useTheme();
   const { isConnected } = useDatabaseStatus();
   
   useEffect(() => {
@@ -81,18 +82,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 </span>
               </div>
 
-              <button
-                onClick={toggleDarkMode}
-                className="rounded-full p-2 text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                title={darkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
-              >
-                <span className="sr-only">{darkMode ? 'Modo Claro' : 'Modo Escuro'}</span>
-                {darkMode ? (
-                  <Sun className="h-5 w-5 text-yellow-500" />
-                ) : (
-                  <Moon className="h-5 w-5 text-blue-700" />
-                )}
-              </button>
+              <ThemeSelector className="rounded-full" />
               
               <button
                 onClick={() => {

@@ -12,6 +12,7 @@ export interface Usuario {
   dataCriacao?: string;
   dataAtualizacao?: string;
   ultimoLogin?: string | null;
+  preferenciaModoEscuro?: boolean | null; // true = modo escuro, false = modo claro, null = preferência do sistema
 }
 
 export interface UsuarioFormData {

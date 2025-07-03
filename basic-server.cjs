@@ -7,7 +7,7 @@ const url = require('url');
 // Configuração do servidor
 const PORT = 3000;
 const BACKEND_PORT = 3001;
-const BACKEND_HOST = '127.0.0.1'; // Usando IP em vez de 'localhost' para maior consistência
+const BACKEND_HOST = 'localhost'; // Usando IP em vez de 'localhost' para maior consistência
 const DIST_FOLDER = path.join(__dirname, 'dist');
 
 // Tipos MIME comuns
@@ -38,38 +38,25 @@ function replaceHardcodedUrls(content, contentType) {
     
     // Substituir URLs hardcoded por URLs relativas em arquivos JS
     if (contentType === 'text/javascript') {
-      contentStr = contentStr.replace(/['"](http|https):\/\/localhost:3001\/api\//g, '"/api/');
-      contentStr = contentStr.replace(/['"`](http|https):\/\/localhost:3001\//g, '"/'); 
+      // Substituir URLs dentro de strings com aspas simples
+      contentStr = contentStr.replace(/\'(http|https):\/\/localhost:3001\/api\//g, '\'/api/');
+      contentStr = contentStr.replace(/\'(http|https):\/\/localhost:3001\//g, '\'/'); 
+      
+      // Substituir URLs dentro de strings com aspas duplas
+      contentStr = contentStr.replace(/\"(http|https):\/\/localhost:3001\/api\//g, '\"/api/');
+      contentStr = contentStr.replace(/\"(http|https):\/\/localhost:3001\//g, '\"/'); 
+      
+      // Substituir URLs dentro de template literals
+      contentStr = contentStr.replace(/\`(http|https):\/\/localhost:3001\/api\//g, '\`/api/');
+      contentStr = contentStr.replace(/\`(http|https):\/\/localhost:3001\//g, '\`/'); 
     }
     
     // Adicionar script simples no HTML para reescrever URLs
     if (contentType === 'text/html' && contentStr.includes('<head>')) {
       const interceptScript = `
 <script>
-// Reescrever URLs hardcoded
-console.log('Inicializando interceptador de URLs...');
-
-// Interceptar fetch
-const originalFetch = window.fetch;
-window.fetch = function(url, options) {
-  if (typeof url === 'string' && url.includes('localhost:3001')) {
-    const newUrl = url.replace(/https?:\/\/localhost:3001(\/api\/|\/)/g, '$1');
-    console.log('URL interceptado:', url, '->', newUrl);
-    return originalFetch(newUrl, options);
-  }
-  return originalFetch(url, options);
-};
-
-// Interceptar XMLHttpRequest
-const originalXhrOpen = XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open = function(method, url, ...args) {
-  let newUrl = url;
-  if (typeof url === 'string' && url.includes('localhost:3001')) {
-    newUrl = url.replace(/https?:\/\/localhost:3001(\/api\/|\/)/g, '$1');
-    console.log('XHR interceptado:', url, '->', newUrl);
-  }
-  return originalXhrOpen.call(this, method, newUrl, ...args);
-};
+// Configuração para APIs locais
+window.API_BASE = '/api';
 </script>
 `;
       contentStr = contentStr.replace('<head>', '<head>' + interceptScript);
@@ -173,6 +160,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Acesse:`);
   console.log(`- Local: http://localhost:${PORT}`);
-  console.log(`- Rede: http://192.168.1.3:${PORT}`);
   console.log(`As chamadas de API serão redirecionadas para http://${BACKEND_HOST}:${BACKEND_PORT}`);
 });

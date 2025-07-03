@@ -42,6 +42,10 @@ export default function ListaImoveis() {
   const [filtroTipo, setFiltroTipo] = useState<string>('');
   const [filtroStatus, setFiltroStatus] = useState<string>('');
   const [filtroTipoImovel, setFiltroTipoImovel] = useState<'principal' | 'secundario' | 'todos'>('principal');
+  
+  // Estados para armazenar os valores únicos disponíveis para os filtros
+  const [tiposImovelDisponiveis, setTiposImovelDisponiveis] = useState<string[]>([]);
+  const [statusDisponiveis, setStatusDisponiveis] = useState<string[]>([]);
   const [imovelParaExcluir, setImovelParaExcluir] = useState<Imovel | null>(null);
   const [excluindo, setExcluindo] = useState(false);
   const [mensagemExclusao, setMensagemExclusao] = useState<{tipo: 'sucesso' | 'erro', texto: string} | null>(null);
@@ -205,6 +209,28 @@ export default function ListaImoveis() {
         }
         
         setImoveis(imoveisData);
+        
+        // Extrair valores únicos para os filtros
+        if (Array.isArray(imoveisData) && imoveisData.length > 0) {
+          // Extrair tipos de imóvel únicos
+          const tiposUnicos = Array.from(new Set(
+            imoveisData
+              .filter(imovel => imovel && imovel.tipoImovel)
+              .map(imovel => imovel.tipoImovel)
+          )).sort();
+          setTiposImovelDisponiveis(tiposUnicos);
+          
+          // Extrair status de transferência únicos
+          const statusUnicos = Array.from(new Set(
+            imoveisData
+              .filter(imovel => imovel && imovel.statusTransferencia)
+              .map(imovel => imovel.statusTransferencia)
+          )).sort();
+          setStatusDisponiveis(statusUnicos);
+          
+          console.log('Tipos de imóvel disponíveis:', tiposUnicos);
+          console.log('Status disponíveis:', statusUnicos);
+        }
       } catch (err) {
         console.error('Erro ao carregar imóveis:', err);
         setError(err instanceof Error ? err.message : 'Erro ao carregar lista de imóveis');
@@ -362,7 +388,7 @@ export default function ListaImoveis() {
           <div className="flex flex-col sm:flex-row gap-3">
             <ExcelExporterTodosExcelJS
               imoveis={imoveis}
-              buttonText="Exportar Excel"
+              buttonText="Exportar LibreOffice/Excel"
             />
             
             <Link to="/imoveis/cadastro" className="px-4 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg shadow-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors duration-200 inline-flex items-center">
@@ -410,12 +436,9 @@ export default function ListaImoveis() {
               onChange={(e) => setFiltroTipo(e.target.value)}
             >
               <option value="">Todos</option>
-              <option value="Residencial">Residencial</option>
-              <option value="Comercial">Comercial</option>
-              <option value="Industrial">Industrial</option>
-              <option value="Rural">Rural</option>
-              <option value="Terreno">Terreno</option>
-              <option value="Outros">Outros</option>
+              {tiposImovelDisponiveis.map(tipo => (
+                <option key={tipo} value={tipo}>{tipo}</option>
+              ))}
             </select>
           </div>
           
@@ -430,10 +453,9 @@ export default function ListaImoveis() {
               onChange={(e) => setFiltroStatus(e.target.value)}
             >
               <option value="">Todos</option>
-              <option value="Não transferido">Não transferido</option>
-              <option value="Em processo">Em processo</option>
-              <option value="Transferido">Transferido</option>
-              <option value="Cancelado">Cancelado</option>
+              {statusDisponiveis.map(status => (
+                <option key={status} value={status}>{status}</option>
+              ))}
             </select>
           </div>
           

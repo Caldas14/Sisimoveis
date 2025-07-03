@@ -31,6 +31,7 @@ interface DocumentoVinculado {
   Caminho: string;
   Nome: string;
   DataCriacao: string;
+  Tipo: string;
   Matricula?: string;
   Objeto?: string;
   Localizacao?: string;
@@ -57,6 +58,13 @@ interface ImovelPrincipal {
   Finalidade: string;
   documentos: DocumentoVinculado[];
   imoveisSecundarios: ImovelSecundario[];
+}
+
+// Interface para o modal de confirmação de exclusão
+interface ModalConfirmacaoExclusao {
+  visivel: boolean;
+  documentoId: string | null;
+  nomeDocumento: string | null;
 }
 
 // Componente para exibir mensagem de acesso restrito
@@ -95,6 +103,11 @@ export default function Documentos() {
   const [carregando, setCarregando] = useState<boolean>(true);
   const [erro, setErro] = useState<string | null>(null);
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
+  const [modalExclusao, setModalExclusao] = useState<ModalConfirmacaoExclusao>({
+    visivel: false,
+    documentoId: null,
+    nomeDocumento: null
+  });
   
   // Verificar se está usando credenciais mestras
   const usingMasterCredentials = isUsingMasterCredentials();
@@ -107,6 +120,55 @@ export default function Documentos() {
   // Estados para os filtros
   const [filtroTipoImovel, setFiltroTipoImovel] = useState<'todos' | 'principal' | 'secundario'>('todos');
   const [filtrosAplicados, setFiltrosAplicados] = useState<boolean>(false);
+  
+  // Função para obter ícone com base na extensão do arquivo
+  const obterIconeArquivo = (nomeArquivo: string | undefined, darkMode: boolean) => {
+    if (!nomeArquivo) return <File className={`h-5 w-5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />;
+    const extensao = nomeArquivo.split('.').pop()?.toLowerCase() || '';
+    
+    switch (extensao) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'bmp':
+      case 'svg':
+        return <Image className={`h-5 w-5 ${darkMode ? 'text-purple-400' : 'text-purple-600'}`} />;
+      case 'pdf':
+        return <FileText className={`h-5 w-5 ${darkMode ? 'text-red-400' : 'text-red-600'}`} />;
+      case 'doc':
+      case 'docx':
+        return <File className={`h-5 w-5 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />;
+      case 'xls':
+      case 'xlsx':
+        return <Table className={`h-5 w-5 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />;
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return <Archive className={`h-5 w-5 ${darkMode ? 'text-yellow-400' : 'text-yellow-600'}`} />;
+      case 'html':
+      case 'css':
+      case 'js':
+        return <Code className={`h-5 w-5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />;
+      default:
+        return <File className={`h-5 w-5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />;
+    }
+  };
+  
+  // Função para truncar nomes de arquivos longos
+  const truncarNomeArquivo = (nomeArquivo: string, tamanhoMaximo: number = 30) => {
+    if (!nomeArquivo) return '';
+    if (nomeArquivo.length <= tamanhoMaximo) return nomeArquivo;
+    
+    const extensao = nomeArquivo.split('.').pop() || '';
+    const nome = nomeArquivo.substring(0, nomeArquivo.length - extensao.length - 1);
+    
+    if (nome.length <= tamanhoMaximo - 3 - extensao.length) {
+      return nomeArquivo;
+    }
+    
+    return `${nome.substring(0, tamanhoMaximo - 3 - extensao.length)}...${extensao ? '.' + extensao : ''}`;
+  };
   
   // Função para abrir arquivo local usando a API do servidor
   const abrirArquivoLocal = async (caminho: string) => {
@@ -136,9 +198,10 @@ export default function Documentos() {
       
       // Sucesso - o servidor abriu o arquivo
       console.log('Arquivo aberto com sucesso pelo servidor');
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Erro ao abrir arquivo:', err);
-      setErro(`Erro ao abrir arquivo: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      setErro(`Erro ao abrir arquivo: ${errorMessage}`);
       
       // Mostrar mensagem mais amigável para o usuário
       toast.error(`Não foi possível abrir o arquivo. Verifique se o caminho existe e se você tem permissão para acessá-lo.\n\nCaminho: ${caminho}`, 8000);
@@ -165,9 +228,11 @@ export default function Documentos() {
       
       const documentos = await response.json();
       
-      // Separar documentos por tipo de imóvel (principal ou secundário)
-      const principais = documentos.filter((doc: DocumentoVinculado) => doc.TipoImovel === 'Principal');
-      const secundarios = documentos.filter((doc: DocumentoVinculado) => doc.TipoImovel === 'Secundário');
+      // Separar documentos por tipo de imóvel
+      // Nota: TipoImovel pode conter valores como 'Casa', 'Apartamento', etc. em vez de 'Principal'/'Secundário'
+      // Consideramos todos os documentos como principais por enquanto
+      const principais = documentos;
+      const secundarios: DocumentoVinculado[] = [];
       
       setDocumentosPrincipais(principais);
       setDocumentosSecundarios(secundarios);
@@ -179,11 +244,28 @@ export default function Documentos() {
     }
   };
   
+  // Função para abrir o modal de confirmação de exclusão
+  const abrirModalExclusao = (documentoId: string, nomeDocumento: string) => {
+    setModalExclusao({
+      visivel: true,
+      documentoId,
+      nomeDocumento
+    });
+  };
+  
+  // Função para fechar o modal de confirmação de exclusão
+  const fecharModalExclusao = () => {
+    setModalExclusao({
+      visivel: false,
+      documentoId: null,
+      nomeDocumento: null
+    });
+  };
+  
   // Função para excluir um documento
   const excluirDocumento = async (documentoId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este documento?')) return;
-    
     try {
+      setCarregando(true);
       const response = await fetch(`/api/documentos/${documentoId}`, {
         method: 'DELETE'
       });
@@ -192,11 +274,19 @@ export default function Documentos() {
         throw new Error(`Erro ao excluir documento: ${response.status}`);
       }
       
+      // Fechar modal e mostrar mensagem de sucesso
+      fecharModalExclusao();
+      toast.success('Documento excluído com sucesso!');
+      
       // Recarregar documentos
-      carregarDocumentos();
+      await carregarDocumentosVinculados();
     } catch (err) {
       console.error('Erro ao excluir documento:', err);
       setErro('Erro ao excluir documento. Verifique se o servidor está em execução.');
+      toast.error('Erro ao excluir documento');
+      fecharModalExclusao();
+    } finally {
+      setCarregando(false);
     }
   };
   
@@ -205,33 +295,145 @@ export default function Documentos() {
     carregarDocumentosVinculados();
   }, []);
   
-  // Função para carregar documentos vinculados a imóveis
   const carregarDocumentosVinculados = async () => {
     try {
       setCarregando(true);
       setErro(null);
       
-      const response = await fetch('/api/documentos/todos-vinculados');
+      console.log('Carregando lista de imóveis para identificar primários e secundários...');
+      const responseImoveis = await fetch('/api/imoveis');
       
+      if (!responseImoveis.ok) {
+        throw new Error(`Erro ao carregar lista de imóveis: ${responseImoveis.status}`);
+      }
+      
+      const imoveis = await responseImoveis.json();
+      console.log('Lista de imóveis carregada:', imoveis.length, 'imóveis');
+      
+      // Exemplo do primeiro imóvel para debug
+      if (imoveis.length > 0) {
+        console.log('Exemplo de imóvel:', imoveis[0]);
+      }
+      
+      // Criar um mapa de imóveis com informações sobre primário/secundário
+      const mapImoveis: {[id: string]: {isPrimario: boolean, imovelPaiId?: string}} = {};
+      
+      // Preencher o mapa de imóveis
+      imoveis.forEach((imovel: any) => {
+        // Verificar diferentes possibilidades de nome do campo
+        const imovelPaiId = imovel.ImovelPaiId || imovel.imovelPaiId || imovel.ImoveiPaiId || imovel.imoveiPaiId || null;
+        
+        mapImoveis[imovel.Id] = {
+          isPrimario: !imovelPaiId || imovelPaiId === 'NULL' || imovelPaiId === null,
+          imovelPaiId: imovelPaiId !== 'NULL' && imovelPaiId !== null ? imovelPaiId : undefined
+        };
+        
+        console.log(`Imóvel ${imovel.Id} identificado como ${mapImoveis[imovel.Id].isPrimario ? 'PRIMÁRIO' : 'SECUNDÁRIO'}${mapImoveis[imovel.Id].imovelPaiId ? ` (pai: ${mapImoveis[imovel.Id].imovelPaiId})` : ''}`);
+      });
+      
+      // 2. Agora, carregar os documentos vinculados
+      const response = await fetch('/api/documentos/todos-vinculados');
       if (!response.ok) {
         throw new Error(`Erro ao carregar documentos vinculados: ${response.status}`);
       }
       
       const data = await response.json();
-      setImoveisPrincipais(data);
-      setImoveisPrincipaisOriginal(data); // Guardar os dados originais para filtros
+      console.log('Dados de documentos recebidos da API:', data);
       
-      // Inicializar o estado de expansão para todos os imóveis principais
+      // 3. Processar os dados e criar estruturas para imóveis primários e secundários
+      const imoveisPrimarios: ImovelPrincipal[] = [];
+      const imoveisSecundarios: {[imovelPaiId: string]: ImovelSecundario[]} = {};
+      const todosImoveis: {[id: string]: any} = {};
+      
+      // Primeiro passo: criar estrutura base para todos os imóveis
+      imoveis.forEach((imovel: any) => {
+        const imovelInfo = mapImoveis[imovel.Id];
+        
+        if (!imovelInfo) {
+          console.warn(`Imóvel ${imovel.Id} não encontrado no mapa`);
+          return;
+        }
+        
+        // Criar objeto base do imóvel com seus campos
+        const imovelObj = {
+          Id: imovel.Id,
+          ImovelId: imovel.Id, // Garantir que temos ImovelId para compatibilidade
+          Matricula: imovel.Matricula || 'Sem matrícula',
+          Localizacao: imovel.Localizacao || 'Localização não informada',
+          TipoImovel: imovel.TipoImovel || 'Não especificado',
+          Finalidade: imovel.Finalidade || 'Não especificada',
+          documentos: []
+        };
+        
+        todosImoveis[imovel.Id] = imovelObj;
+        
+        if (imovelInfo.isPrimario) {
+          // É um imóvel primário
+          imoveisPrimarios.push({
+            ...imovelObj,
+            imoveisSecundarios: []
+          });
+        } else if (imovelInfo.imovelPaiId) {
+          // É um imóvel secundário
+          if (!imoveisSecundarios[imovelInfo.imovelPaiId]) {
+            imoveisSecundarios[imovelInfo.imovelPaiId] = [];
+          }
+          imoveisSecundarios[imovelInfo.imovelPaiId].push(imovelObj);
+        }
+      });
+      
+      // Segundo passo: associar documentos aos imóveis
+      data.forEach((item: any) => {
+        if (item.Caminho && item.Nome && item.ImovelId) {
+          const doc: DocumentoVinculado = {
+            Id: item.Id,
+            ImovelId: item.ImovelId,
+            Caminho: item.Caminho || '',
+            Nome: item.Nome || 'Documento sem nome',
+            DataCriacao: item.DataCriacao || new Date().toISOString(),
+            Tipo: item.Tipo || 'Não especificado'
+          };
+          
+          // Verificar se o imóvel existe no nosso mapa
+          if (todosImoveis[item.ImovelId]) {
+            todosImoveis[item.ImovelId].documentos.push(doc);
+          }
+        }
+      });
+      
+      // Terceiro passo: associar imóveis secundários aos seus primários
+      imoveisPrimarios.forEach((imovelPrimario: ImovelPrincipal) => {
+        // Filtrar apenas imóveis secundários que têm documentos
+        const secundariosComDocumentos = (imoveisSecundarios[imovelPrimario.Id] || []).filter(secundario => 
+          secundario.documentos && secundario.documentos.length > 0
+        );
+        imovelPrimario.imoveisSecundarios = secundariosComDocumentos;
+        console.log(`Imóvel primário ${imovelPrimario.Id} tem ${imovelPrimario.imoveisSecundarios.length} imóveis secundários com documentos`);
+      });
+      
+      // Inicializar o estado de expansão para todos os imóveis
       const estadoExpansao: {[key: string]: boolean} = {};
-      data.forEach((imovel: ImovelPrincipal) => {
+      imoveisPrimarios.forEach((imovel: ImovelPrincipal) => {
         estadoExpansao[imovel.Id] = true; // Expandir por padrão
         
         // Também inicializar para imóveis secundários
-        imovel.imoveisSecundarios.forEach((secundario) => {
+        imovel.imoveisSecundarios.forEach((secundario: ImovelSecundario) => {
           estadoExpansao[secundario.Id] = true; // Expandir por padrão
         });
       });
+      
       setImoveisExpandidos(estadoExpansao);
+      
+      // Filtrar apenas imóveis primários que têm documentos ou imóveis secundários com documentos
+      const imoveisPrimariosComDocumentos = imoveisPrimarios.filter(imovel => 
+        (imovel.documentos && imovel.documentos.length > 0) || 
+        (imovel.imoveisSecundarios && imovel.imoveisSecundarios.length > 0)
+      );
+      
+      console.log('Imóveis primários com documentos:', imoveisPrimariosComDocumentos.length);
+      
+      setImoveisPrincipais(imoveisPrimariosComDocumentos);
+      setImoveisPrincipaisOriginal(imoveisPrimariosComDocumentos);
     } catch (err) {
       console.error('Erro ao carregar documentos vinculados:', err);
       setErro('Erro ao carregar documentos vinculados. Verifique se o servidor está em execução.');
@@ -323,8 +525,14 @@ export default function Documentos() {
       
       // Removido filtro por data
       
+      // Garantir que apenas imóveis com documentos sejam exibidos
+      const imoveisFiltradosComDocumentos = imoveisFiltrados.filter((imovel: ImovelPrincipal) => 
+        (imovel.documentos && imovel.documentos.length > 0) || 
+        (imovel.imoveisSecundarios && imovel.imoveisSecundarios.some((sec: ImovelSecundario) => sec.documentos && sec.documentos.length > 0))
+      );
+      
       // Atualizar o estado com os imóveis filtrados
-      setImoveisPrincipais(imoveisFiltrados);
+      setImoveisPrincipais(imoveisFiltradosComDocumentos);
     } catch (err) {
       console.error('Erro ao aplicar filtros:', err);
       setErro('Erro ao aplicar filtros. Tente novamente.');
@@ -332,6 +540,8 @@ export default function Documentos() {
       setCarregando(false);
     }
   };
+  
+
   
 
   
@@ -394,7 +604,9 @@ export default function Documentos() {
           documentos: docsPrincipais,
           imoveisSecundarios: secundariosFiltrados
         };
-      }).filter(imovel => imovel.documentos.length > 0 || imovel.imoveisSecundarios.length > 0);
+      })
+      // Filtrar apenas imóveis que têm documentos (principais ou secundários)
+      .filter(imovel => imovel.documentos.length > 0 || imovel.imoveisSecundarios.length > 0);
       
       setImoveisPrincipais(imoveisFiltrados);
     } catch (err) {
@@ -405,47 +617,7 @@ export default function Documentos() {
     }
   };
   
-  // Função para obter ícone baseado no nome do arquivo
-  const obterIconeArquivo = (nomeArquivo: string | undefined | null) => {
-    if (!nomeArquivo) return <File className="w-5 h-5 text-gray-500" />;
-    const extensao = nomeArquivo.split('.').pop()?.toLowerCase();
-    
-    switch (extensao) {
-      case 'pdf':
-        return <FileText className="w-5 h-5 text-red-500" />;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'bmp':
-        return <Image className="w-5 h-5 text-blue-500" />;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return <Archive className="w-5 h-5 text-yellow-500" />;
-      case 'xls':
-      case 'xlsx':
-      case 'csv':
-        return <Table className="w-5 h-5 text-green-500" />;
-      case 'html':
-      case 'css':
-      case 'js':
-      case 'ts':
-      case 'json':
-        return <Code className="w-5 h-5 text-purple-500" />;
-      default:
-        return <FileText className="w-5 h-5 text-gray-500" />;
-    }
-  };
-  
-  // Função para truncar nome de arquivo
-  const truncarNomeArquivo = (nome: string | undefined | null, maxLength: number = 30) => {
-    if (!nome) return 'Sem nome';
-    if (nome.length <= maxLength) return nome;
-    const extensao = nome.split('.').pop() || '';
-    const nomeBase = nome.substring(0, nome.length - extensao.length - 1);
-    return nomeBase.substring(0, maxLength - 3 - extensao.length) + '...' + '.' + extensao;
-  };
+
   
   return (
     <div className="container mx-auto px-4 py-6 animate-fade-in">
@@ -617,7 +789,7 @@ export default function Documentos() {
                   </div>
                   <div className="flex items-center">
                     <span className={`mr-2 px-2 py-1 text-xs rounded-full ${darkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'}`}>
-                      {imovelPrincipal.documentos.length} documentos
+                      {(imovelPrincipal.documentos && Array.isArray(imovelPrincipal.documentos) ? imovelPrincipal.documentos.length : 0)} documentos
                     </span>
                     {imoveisExpandidos[imovelPrincipal.Id] ? (
                       <ChevronDown className="h-5 w-5" />
@@ -631,23 +803,31 @@ export default function Documentos() {
                 {imoveisExpandidos[imovelPrincipal.Id] && (
                   <div className="p-4">
                     {/* Documentos do imóvel principal */}
-                    {imovelPrincipal.documentos.length > 0 ? (
+                    {/* Debug para verificar o conteúdo de documentos */}
+                    <div className="text-xs text-gray-500 mb-2">
+                      {/* Movido o console.log para fora do JSX para evitar erro de tipo */}
+                      {(() => {
+                        console.log('Documentos do imóvel:', imovelPrincipal.Id, imovelPrincipal.documentos);
+                        return null;
+                      })()}
+                    </div>
+                    {(imovelPrincipal.documentos && Array.isArray(imovelPrincipal.documentos) && imovelPrincipal.documentos.length > 0) ? (
                       <div className="mb-4">
                         <h4 className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                           Documentos deste imóvel:
                         </h4>
                         <ul className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                          {imovelPrincipal.documentos.map((doc) => (
+                          {imovelPrincipal.documentos && Array.isArray(imovelPrincipal.documentos) && imovelPrincipal.documentos.map((doc) => (
                             <li key={doc.Id} className="py-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center">
-                                  {obterIconeArquivo(doc.Nome)}
+                                  {obterIconeArquivo(doc.Nome || '', darkMode)}
                                   <div className="ml-2">
                                     <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                      {truncarNomeArquivo(doc.Nome)}
+                                      {truncarNomeArquivo(doc.Nome || '')}
                                     </p>
                                     <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                      {doc.Tipo} - {new Date(doc.DataCriacao).toLocaleDateString()}
+                                      {(doc.Nome || '').split('.').pop()} - {new Date(doc.DataCriacao || '').toLocaleDateString()}
                                     </p>
                                   </div>
                                 </div>
@@ -667,7 +847,7 @@ export default function Documentos() {
                                     <Building2 className="h-4 w-4 text-blue-500" />
                                   </Link>
                                   <button 
-                                    onClick={() => excluirDocumento(doc.Id)}
+                                    onClick={() => abrirModalExclusao(doc.Id, doc.Nome || 'Documento')}
                                     className={`p-1 rounded-full ${darkMode ? 'hover:bg-red-700' : 'hover:bg-red-100'}`}
                                     title="Excluir Documento"
                                   >
@@ -686,13 +866,13 @@ export default function Documentos() {
                     )}
                     
                     {/* Imóveis secundários */}
-                    {imovelPrincipal.imoveisSecundarios.length > 0 && (
+                    {imovelPrincipal.imoveisSecundarios && Array.isArray(imovelPrincipal.imoveisSecundarios) && imovelPrincipal.imoveisSecundarios.length > 0 && (
                       <div className="mt-4">
                         <h4 className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                           Imóveis Secundários:
                         </h4>
                         <div className="space-y-2">
-                          {imovelPrincipal.imoveisSecundarios.map((imovelSecundario) => (
+                          {imovelPrincipal.imoveisSecundarios && Array.isArray(imovelPrincipal.imoveisSecundarios) && imovelPrincipal.imoveisSecundarios.map((imovelSecundario) => (
                             <div 
                               key={imovelSecundario.Id} 
                               className={`rounded-lg border ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}
@@ -737,7 +917,7 @@ export default function Documentos() {
                                         <li key={doc.Id} className="py-2">
                                           <div className="flex items-center justify-between">
                                             <div className="flex items-center">
-                                              {obterIconeArquivo(doc.Nome)}
+                                              {obterIconeArquivo(doc.Nome, darkMode)}
                                               <div className="ml-2">
                                                 <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                                   {truncarNomeArquivo(doc.Nome)}
@@ -763,7 +943,7 @@ export default function Documentos() {
                                                 <Building2 className="h-3 w-3 text-blue-500" />
                                               </Link>
                                               <button 
-                                                onClick={() => excluirDocumento(doc.Id)}
+                                                onClick={() => abrirModalExclusao(doc.Id, doc.Nome || 'Documento')}
                                                 className={`p-1 rounded-full ${darkMode ? 'hover:bg-red-700' : 'hover:bg-red-100'}`}
                                                 title="Excluir Documento"
                                               >
@@ -793,6 +973,46 @@ export default function Documentos() {
           </div>
         )}
       </div>
+      
+      {/* Modal de confirmação de exclusão */}
+      {modalExclusao.visivel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-lg shadow-lg max-w-md w-full p-6 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
+            <div className="text-center mb-4">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className={`text-lg font-medium ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>Confirmar Exclusão</h3>
+              <p className={`text-sm mt-2 ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
+                Tem certeza que deseja excluir este documento?
+                <span className="block font-medium mt-1 break-all">
+                  {modalExclusao.nomeDocumento && truncarNomeArquivo(modalExclusao.nomeDocumento, 40)}
+                </span>
+              </p>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={fecharModalExclusao}
+                className={`px-4 py-2 rounded-md ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => modalExclusao.documentoId && excluirDocumento(modalExclusao.documentoId)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                disabled={carregando}
+              >
+                {carregando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 inline animate-spin" />
+                    Excluindo...
+                  </>
+                ) : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -807,9 +1027,10 @@ export default function Documentos() {
     return total + docsImovelPrincipal + docsImoveisSecundarios;
   }, 0);
   
-  // Contagem de imóveis com documentos
-  const totalImoveisPrincipais = imoveisPrincipais.length;
-  const totalImoveisSecundarios = imoveisPrincipais.reduce(
-    (total, imovel) => total + imovel.imoveisSecundarios.length, 0
-  );
+  // Contagem de imóveis com documentos (comentado para evitar warnings de variáveis não utilizadas)
+  // Estas variáveis podem ser usadas no futuro para exibir estatísticas
+  // const totalImoveisPrincipais = imoveisPrincipais.length;
+  // const totalImoveisSecundarios = imoveisPrincipais.reduce(
+  //   (total, imovel) => total + (imovel.imoveisSecundarios?.length || 0), 0
+  // );
 }
